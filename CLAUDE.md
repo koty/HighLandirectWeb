@@ -25,8 +25,10 @@ npm run type-check   # TypeScript型チェック
 
 ### CloudFlare Workers
 ```bash
-wrangler dev         # Workers開発環境 (port 8787)
-wrangler d1 execute highlander-db --file=schema.sql  # D1スキーマ適用
+npm run dev:workers  # Workers開発環境 (port 8787)
+# または
+npx wrangler dev --port 8787
+wrangler d1 execute highlander-db --file=migration/schema.sql  # D1スキーマ適用
 ```
 
 ## Architecture Overview
@@ -48,15 +50,26 @@ wrangler d1 execute highlander-db --file=schema.sql  # D1スキーマ適用
 src/
 ├── api/client.ts      # API クライアント設定
 ├── components/Layout/ # 共通レイアウト
+├── data/mockData.ts  # 開発用モックデータ
 ├── pages/            # ページコンポーネント
+│   ├── Dashboard.tsx # ダッシュボード
 │   ├── Orders/       # 注文管理
 │   ├── Shippers/     # 荷主管理
 │   ├── Consignees/   # 送付先管理
 │   ├── Products/     # 商品管理
 │   └── Stores/       # 集配所管理
 ├── types/index.ts    # TypeScript型定義
+├── theme.ts          # MUIテーマ設定
 ├── middleware/       # Workers ミドルウェア
 ├── routes/          # API エンドポイント
+│   ├── orders.ts    # 注文管理API
+│   ├── shippers.ts  # 荷主管理API
+│   ├── consignees.ts # 送付先管理API
+│   ├── products.ts  # 商品管理API
+│   ├── stores.ts    # 集配所管理API
+│   └── postal.ts    # 郵便番号検索API
+├── utils/postalCodeApi.ts # 郵便番号API クライアント
+├── components/AddressForm.tsx # 住所入力フォーム（郵便番号自動補完付き）
 └── worker.ts        # Workers エントリーポイント
 ```
 
@@ -86,20 +99,23 @@ Order (注文)
 
 ### API設計パターン
 - REST API with CloudFlare Workers
-- CORS対応済み
-- エラーハンドリング統一
+- CORS対応済み (`src/middleware/cors.ts`)
+- エラーハンドリング統一 (`src/middleware/errorHandler.ts`)
 - ページネーション対応（orders, shippers, consignees）
+- API Base URL: `/api/` prefix for all endpoints
 
 ### React コンポーネント設計
-- TypeScript strict mode
-- MUI コンポーネント統一
+- TypeScript strict mode with path aliases (`@/` points to `src/`)
+- MUI コンポーネント統一 (Material-UI v5)
 - React Hook Form + Yup バリデーション
 - カスタムフック活用
+- 現在はモックデータで動作 (`src/data/mockData.ts`)
 
 ### データフェッチング
-- React Query for server state
-- API client in `src/api/client.ts`
-- 型安全なAPI呼び出し
+- React Query for server state management
+- API client in `src/api/client.ts` 
+- 型安全なAPI呼び出し (全エンティティの型定義済み)
+- CloudFlare D1 binding: `DB` (環境: `Env` interface in `worker.ts`)
 
 ## Future Features
 
@@ -179,6 +195,14 @@ MigrationTool.exe "MyData.sdf" "new.sqlite"
 - [x] TypeScript設定・パスエイリアス設定
 - [x] ESLint・Git設定ファイル作成
 
+### Phase 6: 住所入力フォーム・郵便番号API実装 ✅完了
+- [x] 共通AddressFormコンポーネント作成（郵便番号自動補完機能付き）
+- [x] 荷主・送付先作成フォーム実装（ShipperForm / ConsigneeForm）
+- [x] 日本郵便APIのOAuth 2.0認証フロー実装
+- [x] CloudFlare Workers経由での郵便番号検索API実装（CORS回避）
+- [x] トークン管理・キャッシュ機能実装
+- [x] Viteプロキシ設定でフロントエンド-Workers連携
+
 ## 現在の状態
 
 ### ✅ 完全動作する機能
@@ -188,6 +212,8 @@ MigrationTool.exe "MyData.sdf" "new.sqlite"
 4. **マスタデータ管理**: 全エンティティの一覧表示
 5. **レスポンシブUI**: デスクトップ・タブレット・モバイル対応
 6. **型安全な開発**: TypeScript strict mode
+7. **住所入力フォーム**: 郵便番号7桁入力で住所自動補完
+8. **荷主・送付先作成**: バリデーション付きフォーム完備
 
 ### 📊 テストデータ詳細
 - **東京商事株式会社** → **山田太郎**: 宅急便60サイズ（完了）
@@ -197,7 +223,7 @@ MigrationTool.exe "MyData.sdf" "new.sqlite"
 
 ### 🔜 次期実装予定
 1. **CloudFlare D1連携**: 実際のデータベース接続
-2. **荷主・送付先フォーム**: 作成・編集画面の実装
+2. **日本郵便API本番連携**: 正式な認証情報での実装
 3. **ヤマトB2 API連携**: 印刷機能の実装
 4. **ユーザー認証**: 権限管理システム
 5. **リアルタイム機能**: 配送状況追跡
@@ -222,3 +248,22 @@ npm run lint
 npm run build
 npm run deploy
 ```
+
+## Key Files for Development
+
+### Configuration Files
+- `wrangler.toml` - CloudFlare Workers/D1 configuration  
+- `vite.config.ts` - Frontend build configuration with path aliases
+- `tsconfig.json` - TypeScript configuration (strict mode)
+- `package.json` - Dependencies and scripts
+
+### Core Architecture Files
+- `src/worker.ts` - CloudFlare Workers entry point with router setup
+- `src/types/index.ts` - Complete TypeScript definitions for all entities
+- `src/theme.ts` - MUI theme configuration
+- `src/data/mockData.ts` - Rich mock data for development
+
+### Environment Setup
+- Development: React runs on port 3000, Workers on port 8787
+- Path alias `@/` configured to point to `src/`
+- Mock data includes 5 addresses, 3 shippers, 3 consignees, 4 products, 3 stores, 5 orders

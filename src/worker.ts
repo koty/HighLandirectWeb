@@ -11,6 +11,7 @@ import { shippersRoutes } from './routes/shippers'
 import { consigneesRoutes } from './routes/consignees'
 import { productsRoutes } from './routes/products'
 import { storesRoutes } from './routes/stores'
+import { postalRoutes } from './routes/postal'
 
 export interface Env {
   DB: D1Database
@@ -38,6 +39,7 @@ router.all('/api/shippers/*', shippersRoutes.handle)
 router.all('/api/consignees/*', consigneesRoutes.handle)
 router.all('/api/products/*', productsRoutes.handle)
 router.all('/api/stores/*', storesRoutes.handle)
+router.all('/api/postal/*', postalRoutes.handle)
 
 // Fallback for unmatched routes
 router.all('*', () => new Response('Not Found', { status: 404 }))
