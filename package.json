@@ -8,7 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "deploy": "wrangler pages publish dist",
-    "dev:workers": "wrangler dev --port 8787 --local",
+    "dev:workers": "cd backend && wrangler dev --port 8787 --local",
     "lint": "eslint . --ext js,jsx,ts,tsx",
     "lint:fix": "eslint . --ext js,jsx,ts,tsx --fix",
     "type-check": "tsc --noEmit"
