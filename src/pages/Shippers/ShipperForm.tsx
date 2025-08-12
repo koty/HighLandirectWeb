@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import {
   Box,
   Card,
@@ -9,12 +9,15 @@ import {
   Grid,
   MenuItem,
   Divider,
+  CircularProgress,
+  Alert,
 } from '@mui/material'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useForm, Controller } from 'react-hook-form'
 import { yupResolver } from '@hookform/resolvers/yup'
 import * as yup from 'yup'
 import { useSnackbar } from 'notistack'
+import { useQuery, useQueryClient } from 'react-query'
 import axios from 'axios'
 
 import AddressForm from '@/components/AddressForm'
@@ -57,13 +60,29 @@ const ShipperForm: React.FC = () => {
   const navigate = useNavigate()
   const { id } = useParams()
   const { enqueueSnackbar } = useSnackbar()
+  const queryClient = useQueryClient()
   const isEdit = Boolean(id)
+
+  // Fetch shipper data for editing
+  const { data: shipperData, isLoading: isLoadingShipper, error: shipperError } = useQuery(
+    ['shipper', id],
+    async () => {
+      if (!id) return null
+      const response = await axios.get(`/api/shippers/${id}`)
+      return response.data.data
+    },
+    {
+      enabled: isEdit,
+      refetchOnWindowFocus: false
+    }
+  )
 
   const {
     control,
     handleSubmit,
     formState: { errors },
     setValue,
+    reset,
   } = useForm<ShipperFormData>({
     resolver: yupResolver(schema),
     defaultValues: {
@@ -89,13 +108,67 @@ const ShipperForm: React.FC = () => {
     },
   })
 
+  // Load existing data when editing
+  useEffect(() => {
+    if (shipperData && isEdit) {
+      console.log('Loading shipper data:', shipperData)
+      reset({
+        Address: {
+          Name: shipperData.Name || '',
+          Furigana: shipperData.Furigana || '',
+          PostalCD: shipperData.PostalCD || '',
+          PrefectureName: shipperData.PrefectureName || '',
+          CityName: shipperData.CityName || '',
+          Address1: shipperData.Address1 || '',
+          Address2: shipperData.Address2 || '',
+          Phone: shipperData.Phone || '',
+          Fax: shipperData.Fax || '',
+          MailAddress: shipperData.MailAddress || '',
+          Memo: shipperData.Memo || '',
+          IsActive: shipperData.IsActive === 1,
+        },
+        ShipperCode: shipperData.ShipperCode || '',
+        ShipperType: shipperData.ShipperType || '',
+        CreditLimit: shipperData.CreditLimit || 0,
+        PaymentTerms: shipperData.PaymentTerms || '',
+        IsActive: shipperData.IsActive === 1,
+      })
+    }
+  }, [shipperData, isEdit, reset])
+
   const onSubmit = async (data: ShipperFormData) => {
     try {
       console.log('Submit data:', data)
       
       if (isEdit) {
-        // TODO: PUT API for editing
-        enqueueSnackbar('荷主情報を更新しました', { variant: 'success' })
+        // PUT API for editing
+        const response = await axios.put(`/api/shippers/${id}`, {
+          Name: data.Address.Name,
+          Furigana: data.Address.Furigana,
+          Keisho: data.Address.Keisho,
+          PostalCD: data.Address.PostalCD,
+          PrefectureName: data.Address.PrefectureName,
+          CityName: data.Address.CityName,
+          Address1: data.Address.Address1,
+          Address2: data.Address.Address2,
+          Phone: data.Address.Phone,
+          Fax: data.Address.Fax,
+          MailAddress: data.Address.MailAddress,
+          Memo: data.Address.Memo,
+          ShipperCode: data.ShipperCode,
+          ShipperType: data.ShipperType,
+          CreditLimit: data.CreditLimit,
+          PaymentTerms: data.PaymentTerms,
+        })
+        
+        if (response.data.success) {
+          enqueueSnackbar('荷主情報を更新しました', { variant: 'success' })
+          // Invalidate cache to refresh data
+          queryClient.invalidateQueries(['shippers'])
+          queryClient.invalidateQueries(['shipper', id])
+        } else {
+          throw new Error(response.data.error || '更新に失敗しました')
+        }
       } else {
         // POST API for creating new shipper
         const response = await axios.post('/api/shippers', {
@@ -119,6 +192,8 @@ const ShipperForm: React.FC = () => {
         
         if (response.data.success) {
           enqueueSnackbar('荷主を作成しました', { variant: 'success' })
+          // Invalidate cache to refresh data
+          queryClient.invalidateQueries(['shippers'])
         } else {
           throw new Error(response.data.error || '作成に失敗しました')
         }
@@ -132,6 +207,39 @@ const ShipperForm: React.FC = () => {
         : 'エラーが発生しました'
       enqueueSnackbar(errorMessage, { variant: 'error' })
     }
+  }
+
+  // Show loading when editing and fetching data
+  if (isEdit && isLoadingShipper) {
+    return (
+      <Box>
+        <Typography variant="h4" gutterBottom>
+          荷主編集
+        </Typography>
+        <Box display="flex" justifyContent="center" alignItems="center" height={400}>
+          <CircularProgress />
+        </Box>
+      </Box>
+    )
+  }
+
+  // Show error when failing to fetch shipper data
+  if (isEdit && shipperError) {
+    return (
+      <Box>
+        <Typography variant="h4" gutterBottom>
+          荷主編集
+        </Typography>
+        <Alert severity="error">
+          荷主データの取得に失敗しました: {shipperError instanceof Error ? shipperError.message : '不明なエラー'}
+        </Alert>
+        <Box mt={3}>
+          <Button variant="outlined" onClick={() => navigate('/shippers')}>
+            戻る
+          </Button>
+        </Box>
+      </Box>
+    )
   }
 
   return (

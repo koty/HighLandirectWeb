@@ -344,6 +344,196 @@ router.post('/api/orders', async (request, env) => {
   }
 })
 
+// Individual shipper routes
+router.get('/api/shippers/:id', async (request, env) => {
+  const { id } = request.params
+  
+  try {
+    const query = `
+      SELECT 
+        s.ShipperId,
+        s.AddressId,
+        a.Name,
+        a.Furigana,
+        a.Keisho,
+        a.PostalCD,
+        a.PrefectureName,
+        a.CityName,
+        a.Address1,
+        a.Address2,
+        a.Phone,
+        a.Fax,
+        a.MailAddress,
+        a.Memo,
+        s.ShipperCode,
+        s.ShipperType,
+        s.ContractStartDate,
+        s.ContractEndDate,
+        s.CreditLimit,
+        s.PaymentTerms,
+        s.IsActive,
+        s.CreatedAt,
+        s.UpdatedAt
+      FROM Shipper s
+      LEFT JOIN Address a ON s.AddressId = a.AddressId
+      WHERE s.ShipperId = ? AND s.IsActive = 1
+    `
+    
+    const result = await env.DB.prepare(query).bind(id).first()
+    
+    if (!result) {
+      return new Response(JSON.stringify({
+        error: 'Shipper not found'
+      }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json', ...CORS_HEADERS }
+      })
+    }
+    
+    return new Response(JSON.stringify({
+      success: true,
+      data: result
+    }), {
+      headers: { 'Content-Type': 'application/json', ...CORS_HEADERS }
+    })
+  } catch (error) {
+    return new Response(JSON.stringify({
+      error: error.message
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...CORS_HEADERS }
+    })
+  }
+})
+
+router.put('/api/shippers/:id', async (request, env) => {
+  const { id } = request.params
+  const data = await request.json()
+  
+  try {
+    // Get current shipper to find AddressId
+    const getCurrentQuery = `
+      SELECT AddressId FROM Shipper WHERE ShipperId = ? AND IsActive = 1
+    `
+    
+    const currentResult = await env.DB.prepare(getCurrentQuery).bind(id).first()
+    
+    if (!currentResult) {
+      return new Response(JSON.stringify({
+        error: 'Shipper not found'
+      }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json', ...CORS_HEADERS }
+      })
+    }
+    
+    const addressId = currentResult.AddressId
+    
+    // Update address information
+    const updateAddressQuery = `
+      UPDATE Address SET
+        Name = ?,
+        Furigana = ?,
+        Keisho = ?,
+        PostalCD = ?,
+        PrefectureName = ?,
+        CityName = ?,
+        Address1 = ?,
+        Address2 = ?,
+        Phone = ?,
+        Fax = ?,
+        MailAddress = ?,
+        Memo = ?,
+        UpdatedAt = CURRENT_TIMESTAMP
+      WHERE AddressId = ?
+    `
+    
+    await env.DB.prepare(updateAddressQuery).bind(
+      data.Name,
+      data.Furigana || null,
+      data.Keisho || null,
+      data.PostalCD || null,
+      data.PrefectureName || null,
+      data.CityName || null,
+      data.Address1 || null,
+      data.Address2 || null,
+      data.Phone || null,
+      data.Fax || null,
+      data.MailAddress || null,
+      data.Memo || null,
+      addressId
+    ).run()
+    
+    // Update shipper information
+    const updateShipperQuery = `
+      UPDATE Shipper SET
+        ShipperCode = ?,
+        ShipperType = ?,
+        ContractStartDate = ?,
+        CreditLimit = ?,
+        PaymentTerms = ?,
+        UpdatedAt = CURRENT_TIMESTAMP
+      WHERE ShipperId = ?
+    `
+    
+    await env.DB.prepare(updateShipperQuery).bind(
+      data.ShipperCode || null,
+      data.ShipperType || null,
+      data.ContractStartDate || null,
+      data.CreditLimit || null,
+      data.PaymentTerms || null,
+      id
+    ).run()
+    
+    // Return updated shipper
+    const fetchUpdatedQuery = `
+      SELECT 
+        s.ShipperId,
+        s.AddressId,
+        a.Name,
+        a.Furigana,
+        a.Keisho,
+        a.PostalCD,
+        a.PrefectureName,
+        a.CityName,
+        a.Address1,
+        a.Address2,
+        a.Phone,
+        a.Fax,
+        a.MailAddress,
+        a.Memo,
+        s.ShipperCode,
+        s.ShipperType,
+        s.ContractStartDate,
+        s.ContractEndDate,
+        s.CreditLimit,
+        s.PaymentTerms,
+        s.IsActive,
+        s.CreatedAt,
+        s.UpdatedAt
+      FROM Shipper s
+      LEFT JOIN Address a ON s.AddressId = a.AddressId
+      WHERE s.ShipperId = ?
+    `
+    
+    const updatedShipper = await env.DB.prepare(fetchUpdatedQuery).bind(id).first()
+    
+    return new Response(JSON.stringify({
+      success: true,
+      data: updatedShipper
+    }), {
+      headers: { 'Content-Type': 'application/json', ...CORS_HEADERS }
+    })
+  } catch (error) {
+    return new Response(JSON.stringify({
+      error: error.message
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...CORS_HEADERS }
+    })
+  }
+})
+
 // Consignees API
 router.get('/api/consignees', async (request, env) => {
   const url = new URL(request.url)
@@ -423,6 +613,251 @@ router.get('/api/consignees', async (request, env) => {
   } catch (error) {
     return new Response(JSON.stringify({
       success: false,
+      error: error.message
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...CORS_HEADERS }
+    })
+  }
+})
+
+router.post('/api/consignees', async (request, env) => {
+  const data = await request.json()
+  
+  try {
+    // Create address first
+    const addressQuery = `
+      INSERT INTO Address (
+        Name, Furigana, Keisho, PostalCD, PrefectureName, CityName,
+        Address1, Address2, Phone, Fax, MailAddress, Memo
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `
+    
+    const addressResult = await env.DB.prepare(addressQuery).bind(
+      data.Name,
+      data.Furigana || null,
+      data.Keisho || null,
+      data.PostalCD || null,
+      data.PrefectureName || null,
+      data.CityName || null,
+      data.Address1 || null,
+      data.Address2 || null,
+      data.Phone || null,
+      data.Fax || null,
+      data.MailAddress || null,
+      data.Memo || null
+    ).run()
+    
+    const addressId = addressResult.meta.last_row_id
+    
+    // Create consignee
+    const consigneeQuery = `
+      INSERT INTO Consignee (AddressId, ConsigneeCode, DeliveryInstructions, PreferredDeliveryTime)
+      VALUES (?, ?, ?, ?)
+    `
+    
+    const consigneeResult = await env.DB.prepare(consigneeQuery).bind(
+      addressId,
+      data.ConsigneeCode || null,
+      data.DeliveryInstructions || null,
+      data.PreferredDeliveryTime || null
+    ).run()
+    
+    const consigneeId = consigneeResult.meta.last_row_id
+    
+    return new Response(JSON.stringify({
+      success: true,
+      data: {
+        ConsigneeId: consigneeId,
+        AddressId: addressId,
+        ...data
+      }
+    }), {
+      headers: { 'Content-Type': 'application/json', ...CORS_HEADERS }
+    })
+  } catch (error) {
+    return new Response(JSON.stringify({
+      success: false,
+      error: error.message
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...CORS_HEADERS }
+    })
+  }
+})
+
+// Individual consignee routes
+router.get('/api/consignees/:id', async (request, env) => {
+  const { id } = request.params
+  
+  try {
+    const query = `
+      SELECT 
+        c.ConsigneeId,
+        c.AddressId,
+        a.Name,
+        a.Furigana,
+        a.Keisho,
+        a.PostalCD,
+        a.PrefectureName,
+        a.CityName,
+        a.Address1,
+        a.Address2,
+        a.Phone,
+        a.Fax,
+        a.MailAddress,
+        a.Memo,
+        c.ConsigneeCode,
+        c.DeliveryInstructions,
+        c.PreferredDeliveryTime,
+        c.IsActive,
+        c.CreatedAt,
+        c.UpdatedAt
+      FROM Consignee c
+      LEFT JOIN Address a ON c.AddressId = a.AddressId
+      WHERE c.ConsigneeId = ? AND c.IsActive = 1
+    `
+    
+    const result = await env.DB.prepare(query).bind(id).first()
+    
+    if (!result) {
+      return new Response(JSON.stringify({
+        error: 'Consignee not found'
+      }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json', ...CORS_HEADERS }
+      })
+    }
+    
+    return new Response(JSON.stringify({
+      success: true,
+      data: result
+    }), {
+      headers: { 'Content-Type': 'application/json', ...CORS_HEADERS }
+    })
+  } catch (error) {
+    return new Response(JSON.stringify({
+      error: error.message
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...CORS_HEADERS }
+    })
+  }
+})
+
+router.put('/api/consignees/:id', async (request, env) => {
+  const { id } = request.params
+  const data = await request.json()
+  
+  try {
+    // Get current consignee to find AddressId
+    const getCurrentQuery = `
+      SELECT AddressId FROM Consignee WHERE ConsigneeId = ? AND IsActive = 1
+    `
+    
+    const currentResult = await env.DB.prepare(getCurrentQuery).bind(id).first()
+    
+    if (!currentResult) {
+      return new Response(JSON.stringify({
+        error: 'Consignee not found'
+      }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json', ...CORS_HEADERS }
+      })
+    }
+    
+    const addressId = currentResult.AddressId
+    
+    // Update address information
+    const updateAddressQuery = `
+      UPDATE Address SET
+        Name = ?,
+        Furigana = ?,
+        Keisho = ?,
+        PostalCD = ?,
+        PrefectureName = ?,
+        CityName = ?,
+        Address1 = ?,
+        Address2 = ?,
+        Phone = ?,
+        Fax = ?,
+        MailAddress = ?,
+        Memo = ?,
+        UpdatedAt = CURRENT_TIMESTAMP
+      WHERE AddressId = ?
+    `
+    
+    await env.DB.prepare(updateAddressQuery).bind(
+      data.Name,
+      data.Furigana || null,
+      data.Keisho || null,
+      data.PostalCD || null,
+      data.PrefectureName || null,
+      data.CityName || null,
+      data.Address1 || null,
+      data.Address2 || null,
+      data.Phone || null,
+      data.Fax || null,
+      data.MailAddress || null,
+      data.Memo || null,
+      addressId
+    ).run()
+    
+    // Update consignee information
+    const updateConsigneeQuery = `
+      UPDATE Consignee SET
+        ConsigneeCode = ?,
+        DeliveryInstructions = ?,
+        PreferredDeliveryTime = ?,
+        UpdatedAt = CURRENT_TIMESTAMP
+      WHERE ConsigneeId = ?
+    `
+    
+    await env.DB.prepare(updateConsigneeQuery).bind(
+      data.ConsigneeCode || null,
+      data.DeliveryInstructions || null,
+      data.PreferredDeliveryTime || null,
+      id
+    ).run()
+    
+    // Return updated consignee
+    const fetchUpdatedQuery = `
+      SELECT 
+        c.ConsigneeId,
+        c.AddressId,
+        a.Name,
+        a.Furigana,
+        a.Keisho,
+        a.PostalCD,
+        a.PrefectureName,
+        a.CityName,
+        a.Address1,
+        a.Address2,
+        a.Phone,
+        a.Fax,
+        a.MailAddress,
+        a.Memo,
+        c.ConsigneeCode,
+        c.DeliveryInstructions,
+        c.PreferredDeliveryTime,
+        c.IsActive,
+        c.CreatedAt,
+        c.UpdatedAt
+      FROM Consignee c
+      LEFT JOIN Address a ON c.AddressId = a.AddressId
+      WHERE c.ConsigneeId = ?
+    `
+    
+    const updatedConsignee = await env.DB.prepare(fetchUpdatedQuery).bind(id).first()
+    
+    return new Response(JSON.stringify({
+      success: true,
+      data: updatedConsignee
+    }), {
+      headers: { 'Content-Type': 'application/json', ...CORS_HEADERS }
+    })
+  } catch (error) {
+    return new Response(JSON.stringify({
       error: error.message
     }), {
       status: 500,
