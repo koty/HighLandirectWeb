@@ -64,9 +64,14 @@ npm run dev:workers  # Workers開発環境 (port 8787)
 │   ├── types/index.ts      # TypeScript型定義
 │   └── theme.ts            # MUIテーマ設定
 ├── functions/              # CloudFlare Pages Functions (バックエンドAPI)
+│   ├── types.ts            # TypeScript型定義（CloudFlare D1, Pages Functions）
 │   └── api/
-│       ├── health.js       # ヘルスチェック
-│       └── orders.js       # 注文管理API（D1連携済み）
+│       ├── health.ts       # ヘルスチェック
+│       ├── orders.ts       # 注文管理API（D1連携済み）
+│       ├── shippers.ts     # 荷主管理API（D1連携済み）
+│       ├── consignees.ts   # 送付先管理API（D1連携済み）
+│       ├── products.ts     # 商品管理API（D1連携済み）
+│       └── stores.ts       # 集配所管理API（D1連携済み）
 ├── migration/              # データベース関連
 │   ├── schema.sql          # D1データベーススキーマ
 │   ├── seed.sql            # 初期データ
@@ -115,7 +120,13 @@ Order (注文)
 
 ### データベース連携
 - **CloudFlare D1**: `highlandirect-db` リモート運用中
-- **実装済みAPI**: `/api/orders` (GET/POST)、`/api/health`
+- **実装済みAPI**: 全エンティティ対応（TypeScript完全移行済み）
+  - `/api/health` - ヘルスチェック
+  - `/api/orders` - 注文管理（GET/POST、ページネーション、フィルタリング）
+  - `/api/shippers` - 荷主管理（GET/POST、Address JOIN、検索機能）
+  - `/api/consignees` - 送付先管理（GET/POST、Address JOIN、検索機能）
+  - `/api/products` - 商品管理（GET/POST、カテゴリフィルタ、アクティブフィルタ）
+  - `/api/stores` - 集配所管理（GET/POST、運送業者フィルタ、サービスエリア検索）
 - **JOINクエリ**: Address ← Shipper/Consignee ← Order
 - **初期データ**: 3件の注文、関連する荷主・送付先・商品・集配所
 - D1 binding設定: 変数名 `DB`
@@ -206,6 +217,15 @@ MigrationTool.exe "MyData.sdf" "new.sqlite"
 - [x] トークン管理・キャッシュ機能実装
 - [x] Viteプロキシ設定でフロントエンド-Workers連携
 
+### Phase 7: TypeScript完全移行・API拡充 ✅完了
+- [x] CloudFlare Pages Functions JavaScript → TypeScript完全移行
+- [x] `functions/types.ts` 型定義ファイル作成（D1, Pages Functions）
+- [x] 全エンティティAPI実装（Shippers, Consignees, Products, Stores）
+- [x] 型安全なAPI設計（strict TypeScript + エラーハンドリング）
+- [x] Address JOINクエリ対応（荷主・送付先管理）
+- [x] 検索・フィルタリング・ページネーション全API対応
+- [x] パフォーマンス最適化（インデックス追加、クエリ改善）
+
 ## 現在の状態（2025年8月12日時点）
 
 ### 🚀 本番稼働中
@@ -219,10 +239,14 @@ MigrationTool.exe "MyData.sdf" "new.sqlite"
    - スキーマ: 8テーブル（Address, Shipper, Consignee, ProductMaster, Store, Order, OrderHistory, ReportMemo）
    - 初期データ: 3件の注文 + 関連データ
 
-2. **フルスタックAPI**: CloudFlare Pages Functions
+2. **フルスタックAPI**: CloudFlare Pages Functions（TypeScript完全移行済み）
    - `/api/health` - ヘルスチェック
    - `/api/orders` - 注文管理（GET/POST、ページネーション、フィルタリング）
-   - CORS対応、エラーハンドリング完備
+   - `/api/shippers` - 荷主管理（GET/POST、Address JOIN、検索機能）
+   - `/api/consignees` - 送付先管理（GET/POST、Address JOIN、検索機能）
+   - `/api/products` - 商品管理（GET/POST、カテゴリフィルタ、アクティブフィルタ）
+   - `/api/stores` - 集配所管理（GET/POST、運送業者フィルタ、サービスエリア検索）
+   - CORS対応、エラーハンドリング完備、型安全保証
 
 3. **React フロントエンド**: 
    - **注文管理**: D1データベース連携完了（リアルタイムCRUD）
@@ -253,10 +277,11 @@ curl -X POST https://highlandirectweb.pages.dev/api/orders \
 ```
 
 ### 🔜 次期実装予定
-1. **他エンティティのAPI連携**: Shippers, Consignees, Products, Stores
-2. **日本郵便API**: 郵便番号検索の本格実装
-3. **ヤマトB2 API**: 印刷機能
-4. **ユーザー認証**: 権限管理システム
+1. **フロントエンド-API連携**: マスタ管理画面のモックデータからAPI連携への移行
+2. **注文作成フォーム改善**: 実際のShipper/Consignee/Product選択機能
+3. **日本郵便API**: 郵便番号検索の本格実装
+4. **ヤマトB2 API**: 印刷機能
+5. **ユーザー認証**: 権限管理システム
 
 ## 🏆 技術的達成
 - **完全なフルスタックWebアプリケーション**
@@ -306,29 +331,36 @@ git push origin main  # 自動デプロイ → CloudFlare Pages
 - `.github/workflows/deploy.yml` - GitHub Actions CI/CD
 
 ### Core Architecture Files
-- `functions/api/orders.js` - Orders API with D1 database integration
-- `functions/api/health.js` - Health check endpoint
+- `functions/types.ts` - CloudFlare D1 and Pages Functions type definitions
+- `functions/api/orders.ts` - Orders API with D1 database integration
+- `functions/api/health.ts` - Health check endpoint
+- `functions/api/shippers.ts` - Shippers API with Address JOIN
+- `functions/api/consignees.ts` - Consignees API with Address JOIN
+- `functions/api/products.ts` - Products API with filtering
+- `functions/api/stores.ts` - Stores API with carrier filtering
 - `src/pages/Orders/OrderList.tsx` - Orders page with API integration
 - `src/api/client.ts` - Frontend API client
 - `src/types/index.ts` - Complete TypeScript definitions
 - `migration/schema.sql` - D1 database schema
 - `migration/seed.sql` - Initial data
+- `migration/performance_indexes.sql` - Database performance optimization
 
 ### Production Environment
 - **Live URL**: https://highlandirectweb.pages.dev/
 - **Database**: CloudFlare D1 `highlandirect-db` (remote)
-- **API Endpoints**: `/api/health`, `/api/orders`
+- **API Endpoints**: `/api/health`, `/api/orders`, `/api/shippers`, `/api/consignees`, `/api/products`, `/api/stores`
 - **Auto-deploy**: GitHub push → CloudFlare Pages
 - Path alias `@/` configured to point to `src/`
 
 ## Development Roadmap
 
 ### 🚧 高優先度（Next Sprint）
+- [x] **TypeScript完全移行**: CloudFlare Pages Functions JavaScript → TypeScript
+- [x] **全エンティティAPI実装**: Shippers, Consignees, Products, Stores のPages Functions実装完了
+- [x] **データベース最適化**: インデックス調整、クエリパフォーマンス改善完了
+- [ ] **フロントエンド-API連携**: 荷主・送付先・商品・集配所管理画面のモックデータからAPI連携に移行
+- [ ] **注文作成フォーム改善**: 実際のShipper/Consignee/Product選択機能
 - [ ] **ローカル開発環境の整備**: データベース連携した状態で動くようにする
-- [ ] **他エンティティのAPI連携**: Shippers, Consignees, Products, Stores のPages Functions実装
-- [ ] **荷主・送付先・商品・集配所管理**: モックデータからD1データベース連携に移行
-- [ ] **注文作成フォーム**: 実際のShipper/Consignee/Product選択機能
-- [ ] **データベース最適化**: インデックス調整、クエリパフォーマンス改善
 
 ### 🎯 中優先度（Future Features）
 - [ ] **日本郵便API**: 郵便番号検索の本格実装（OAuth 2.0フロー完成済み）
