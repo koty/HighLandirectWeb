@@ -258,7 +258,7 @@ const OrderList: React.FC = () => {
             <DataGrid
               rows={filteredOrders}
               columns={columns}
-              getRowId={(row) => row.OrderId}
+              getRowId={(row) => row.OrderID}
             initialState={{
               pagination: {
                 paginationModel: {
