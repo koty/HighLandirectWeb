@@ -16,6 +16,7 @@ import {
   mapAddressToFormFields, 
   validatePostalCode 
 } from '@/utils/postalCodeApi'
+import { generateNameFurigana } from '@/utils/furigana'
 
 interface AddressFormProps {
   control: Control<any>
@@ -44,6 +45,7 @@ const AddressForm: React.FC<AddressFormProps> = ({
   setValue
 }) => {
   const [isSearching, setIsSearching] = useState(false)
+  const [isFuriganaGenerating, setIsFuriganaGenerating] = useState(false)
   const { enqueueSnackbar } = useSnackbar()
   const getFieldName = (field: string) => namePrefix ? `${namePrefix}.${field}` : field
   const getFieldError = (field: string) => {
@@ -60,6 +62,28 @@ const AddressForm: React.FC<AddressFormProps> = ({
       return error.message as string
     }
     return ''
+  }
+
+  // ふりがな自動生成機能
+  const handleNameChange = async (name: string, field: any) => {
+    field.onChange(name)
+    
+    if (!setValue || !name || name.trim().length === 0) {
+      return
+    }
+
+    setIsFuriganaGenerating(true)
+    try {
+      const furigana = await generateNameFurigana(name.trim())
+      if (furigana) {
+        setValue(getFieldName('Furigana'), furigana)
+      }
+    } catch (error) {
+      console.error('Furigana generation failed:', error)
+      // エラーは表示しない（ユーザーが手動で入力できるため）
+    } finally {
+      setIsFuriganaGenerating(false)
+    }
   }
 
   // 郵便番号検索機能
@@ -114,6 +138,7 @@ const AddressForm: React.FC<AddressFormProps> = ({
               error={Boolean(getFieldError('Name'))}
               helperText={getErrorMessage('Name')}
               required={required}
+              onChange={(e) => handleNameChange(e.target.value, field)}
             />
           )}
         />
@@ -129,7 +154,14 @@ const AddressForm: React.FC<AddressFormProps> = ({
               fullWidth
               label="フリガナ"
               error={Boolean(getFieldError('Furigana'))}
-              helperText={getErrorMessage('Furigana')}
+              helperText={getErrorMessage('Furigana') || '氏名・会社名を入力すると自動生成されます'}
+              InputProps={{
+                endAdornment: isFuriganaGenerating ? (
+                  <InputAdornment position="end">
+                    <CircularProgress size={20} />
+                  </InputAdornment>
+                ) : undefined,
+              }}
             />
           )}
         />

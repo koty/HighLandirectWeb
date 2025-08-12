@@ -1,0 +1,18 @@
+name = "highlandirect-local"
+compatibility_date = "2025-08-12"
+
+# Local development D1 database
+[[d1_databases]]
+binding = "DB"
+database_name = "highlandirect-local"
+database_id = "f53b2061-e67f-4800-a117-1c9fa7dc22c7"
+
+# Environment variables for Japan Post API (local development)
+# Copy this file to wrangler-dev.toml and set your actual values
+[vars]
+JAPANPOST_API_HOST = "stub-qz73x.da.pf.japanpost.jp"
+JAPANPOST_CLIENT_ID = "Biz_DaPfJapanpost_MockAPI_j3QKS"
+JAPANPOST_CLIENT_SECRET = "uXuN0ejHG7nAn89AfAwa"
+JAPANPOST_CLIENT_IP = "127.0.0.1"
+
+# Pages Functions configuration for local development

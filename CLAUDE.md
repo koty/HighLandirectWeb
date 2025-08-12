@@ -10,10 +10,22 @@ HighLandirect Web版 - React + CloudFlare D1 + MUIを使用した配送管理シ
 
 ### 基本コマンド
 ```bash
-npm run dev          # 開発サーバー起動 (port 3000)
+npm run dev          # フロントエンド開発サーバー起動 (port 3000)
 npm run build        # プロダクションビルド
 npm run preview      # ビルド結果のプレビュー
 npm run deploy       # CloudFlare Pages デプロイ
+```
+
+### ローカル開発環境（フルスタック）
+```bash
+# 1. フロントエンド開発サーバー
+npm run dev          # port 3000
+
+# 2. ローカルAPI + D1データベース
+npx wrangler dev worker-local.js --config=wrangler-dev.toml --port=8788
+
+# 両方を同時起動することで、ローカルでフルスタック開発が可能
+# フロントエンド → API → ローカルSQLite データベース
 ```
 
 ### 品質管理
@@ -24,14 +36,24 @@ npm run type-check   # TypeScript型チェック
 ```
 
 ### CloudFlare D1 Database
+
+#### 本番環境（リモート）
 ```bash
-# D1データベース管理
+# 本番データベース管理
 npx wrangler d1 execute highlandirect-db --file=migration/schema.sql --remote  # スキーマ適用
 npx wrangler d1 execute highlandirect-db --file=migration/seed.sql --remote    # 初期データ投入
 npx wrangler d1 execute highlandirect-db --command="SELECT COUNT(*) FROM 'Order'" --remote  # データ確認
+```
 
-# ローカル開発用Workers（オプション）
-npm run dev:workers  # Workers開発環境 (port 8787)
+#### ローカル開発環境
+```bash
+# ローカルD1データベースの初期化
+npx wrangler d1 create highlandirect-local  # ローカルDB作成
+npx wrangler d1 execute highlandirect-local --file=migration/schema.sql --config=wrangler-dev.toml  # スキーマ適用
+npx wrangler d1 execute highlandirect-local --file=migration/seed.sql --config=wrangler-dev.toml    # 初期データ投入
+
+# データ確認
+npx wrangler d1 execute highlandirect-local --command="SELECT COUNT(*) FROM Shipper" --config=wrangler-dev.toml
 ```
 
 ## Architecture Overview
@@ -42,6 +64,7 @@ npm run dev:workers  # Workers開発環境 (port 8787)
 - **React Router** - SPA ルーティング
 - **React Query** - サーバー状態管理
 - **React Hook Form + Yup** - フォーム管理・バリデーション
+- **wanakana** - 日本語ふりがな自動生成
 
 ### バックエンド構成
 - **CloudFlare Pages Functions** - サーバーレス API（functions/ディレクトリ）
@@ -52,7 +75,9 @@ npm run dev:workers  # Workers開発環境 (port 8787)
 ```
 ├── src/                    # フロントエンド
 │   ├── api/client.ts       # API クライアント設定
-│   ├── components/Layout/  # 共通レイアウト
+│   ├── components/
+│   │   ├── Layout/         # 共通レイアウト
+│   │   └── AddressForm.tsx # 住所入力フォーム（ふりがな自動生成機能付き）
 │   ├── data/mockData.ts    # 開発用モックデータ
 │   ├── pages/              # ページコンポーネント
 │   │   ├── Dashboard.tsx   # ダッシュボード
@@ -62,8 +87,11 @@ npm run dev:workers  # Workers開発環境 (port 8787)
 │   │   ├── Products/       # 商品管理
 │   │   └── Stores/         # 集配所管理
 │   ├── types/index.ts      # TypeScript型定義
+│   ├── utils/
+│   │   ├── furigana.ts     # ふりがな自動生成ユーティリティ（wanakana + 辞書）
+│   │   └── postalCodeApi.ts # 郵便番号検索ユーティリティ
 │   └── theme.ts            # MUIテーマ設定
-├── functions/              # CloudFlare Pages Functions (バックエンドAPI)
+├── functions/              # CloudFlare Pages Functions (バックエンドAPI - 本番用)
 │   ├── types.ts            # TypeScript型定義（CloudFlare D1, Pages Functions）
 │   └── api/
 │       ├── health.ts       # ヘルスチェック
@@ -71,13 +99,18 @@ npm run dev:workers  # Workers開発環境 (port 8787)
 │       ├── shippers.ts     # 荷主管理API（D1連携済み）
 │       ├── consignees.ts   # 送付先管理API（D1連携済み）
 │       ├── products.ts     # 商品管理API（D1連携済み）
-│       └── stores.ts       # 集配所管理API（D1連携済み）
+│       ├── stores.ts       # 集配所管理API（D1連携済み）
+│       └── postal/
+│           └── search/
+│               └── [zipcode].ts  # 郵便番号検索API（日本郵便API連携）
+├── worker-local.js         # ローカル開発用CloudFlare Worker
+├── wrangler.toml           # CloudFlare D1設定（本番用）
+├── wrangler-dev.toml       # ローカル開発用設定
 ├── migration/              # データベース関連
 │   ├── schema.sql          # D1データベーススキーマ
 │   ├── seed.sql            # 初期データ
 │   └── README.md           # 移行手順
-├── backend/                # Workers開発用設定（オプション）
-└── wrangler.toml           # CloudFlare D1設定
+└── .wrangler/              # ローカルD1データベースファイル（SQLite）
 ```
 
 ## Database Design
@@ -127,6 +160,7 @@ Order (注文)
   - `/api/consignees` - 送付先管理（GET/POST、Address JOIN、検索機能）
   - `/api/products` - 商品管理（GET/POST、カテゴリフィルタ、アクティブフィルタ）
   - `/api/stores` - 集配所管理（GET/POST、運送業者フィルタ、サービスエリア検索）
+  - `/api/postal/search/[zipcode]` - 郵便番号検索（日本郵便API連携、モックデータフォールバック）
 - **JOINクエリ**: Address ← Shipper/Consignee ← Order
 - **初期データ**: 3件の注文、関連する荷主・送付先・商品・集配所
 - D1 binding設定: 変数名 `DB`
@@ -226,6 +260,42 @@ MigrationTool.exe "MyData.sdf" "new.sqlite"
 - [x] 検索・フィルタリング・ページネーション全API対応
 - [x] パフォーマンス最適化（インデックス追加、クエリ改善）
 
+### Phase 8: 日本郵便API統合・郵便番号検索機能 ✅完了
+- [x] CloudFlare Pages Function による郵便番号検索API実装
+- [x] 日本郵便公式API統合（OAuth 2.0認証、トークン管理）
+- [x] 動的ルーティング `/api/postal/search/[zipcode]` 実装
+- [x] 郵便番号バリデーション（7桁数字形式チェック）
+- [x] モックデータフォールバック機能（API障害時の安全な動作）
+- [x] 詳細住所情報取得（都道府県、市区町村、町名、読み仮名、ローマ字）
+- [x] 環境変数による認証情報管理
+- [x] 本番環境での動作確認（実際の住所データ取得成功）
+
+### Phase 9: 新規作成フォーム（POST API連携）✅完了
+- [x] ShipperForm POST API連携実装（荷主作成）
+- [x] ConsigneeForm POST API連携実装（送付先作成）
+- [x] OrderForm POST API連携実装（注文作成）
+- [x] 包括的なエラーハンドリング・バリデーション
+- [x] 成功・失敗時の適切なユーザーフィードバック
+- [x] 作成後の画面遷移と状態更新
+
+### Phase 10: ローカル開発環境構築（SQLite連携）✅完了
+- [x] ローカルD1データベース構築（`highlandirect-local`）
+- [x] ローカル開発用CloudFlare Worker実装（`worker-local.js`）
+- [x] ローカル環境用設定ファイル（`wrangler-dev.toml`）
+- [x] Vite開発サーバーとローカルAPIの連携設定
+- [x] ローカルSQLite環境でのフルスタック開発環境
+- [x] 初期データ投入とスキーマ適用の自動化
+- [x] 本番同等のCRUD操作をローカルで実現
+
+### Phase 11: ふりがな自動生成機能実装 ✅完了
+- [x] wanakanaライブラリの導入（ブラウザ対応）
+- [x] 人名・会社名特化の漢字→ひらがな辞書システム構築
+- [x] `src/utils/furigana.ts` ふりがな生成ユーティリティ実装
+- [x] AddressFormコンポーネントへの自動生成機能統合
+- [x] 氏名・会社名入力時の即座ふりがな変換
+- [x] ローディング表示・エラーハンドリング・手動修正対応
+- [x] ShipperForm・ConsigneeFormでの利用開始
+
 ## 現在の状態（2025年8月12日時点）
 
 ### 🚀 本番稼働中
@@ -246,19 +316,23 @@ MigrationTool.exe "MyData.sdf" "new.sqlite"
    - `/api/consignees` - 送付先管理（GET/POST、Address JOIN、検索機能）
    - `/api/products` - 商品管理（GET/POST、カテゴリフィルタ、アクティブフィルタ）
    - `/api/stores` - 集配所管理（GET/POST、運送業者フィルタ、サービスエリア検索）
+   - `/api/postal/search/[zipcode]` - 郵便番号検索（日本郵便API、フォールバック対応）
    - CORS対応、エラーハンドリング完備、型安全保証
 
 3. **React フロントエンド**: 
    - **注文管理**: D1データベース連携完了（リアルタイムCRUD）
+   - **荷主管理**: API連携完了（検索・ページネーション・リアルタイム更新）
+   - **送付先管理**: API連携完了（検索・ページネーション・リアルタイム更新）
+   - **商品管理**: API連携完了（検索・ページネーション・リアルタイム更新）
+   - **集配所管理**: API連携完了（検索・ページネーション・リアルタイム更新）
+   - **ふりがな自動生成**: 氏名・会社名入力時の即座変換（wanakana + 辞書システム）
    - **ダッシュボード**: 統計表示
-   - **マスタ管理**: 荷主・送付先・商品・集配所（モックデータ）
    - **レスポンシブUI**: 全デバイス対応
 
 4. **開発・デプロイ環境**:
-   - TypeScript strict mode
-   - 自動型チェック・リント
-   - GitHub Actions CI/CD
-   - CloudFlare Pages自動デプロイ
+   - **本番環境**: CloudFlare Pages + D1 (自動デプロイ、GitHub Actions CI/CD)
+   - **ローカル開発環境**: フルスタック対応（フロントエンド + API + SQLite）
+   - TypeScript strict mode、自動型チェック・リント
 
 ### 📊 実際のデータベースデータ
 - **ORD-2024-001**: 東京商事株式会社 → 山田太郎（宅急便60サイズ、完了）
@@ -274,12 +348,16 @@ curl "https://highlandirectweb.pages.dev/api/orders?page=1&limit=10"
 curl -X POST https://highlandirectweb.pages.dev/api/orders \
   -H "Content-Type: application/json" \
   -d '{"ShipperName":"テスト荷主","ConsigneeName":"テスト送付先"}'
+
+# 郵便番号検索（日本郵便API連携）
+curl "https://highlandirectweb.pages.dev/api/postal/search/1000005"  # 東京都千代田区丸の内
+curl "https://highlandirectweb.pages.dev/api/postal/search/3812204"  # 長野県長野市真島町真島
 ```
 
 ### 🔜 次期実装予定
-1. **フロントエンド-API連携**: マスタ管理画面のモックデータからAPI連携への移行
-2. **注文作成フォーム改善**: 実際のShipper/Consignee/Product選択機能
-3. **日本郵便API**: 郵便番号検索の本格実装
+1. **注文作成フォーム改善**: 実際のShipper/Consignee/Product選択機能
+2. **住所入力フォーム統合**: 郵便番号検索APIをフロントエンドフォームに統合
+3. **新規作成フォーム**: Shipper/Consignee/Product/Store の作成フォーム実装
 4. **ヤマトB2 API**: 印刷機能
 5. **ユーザー認証**: 権限管理システム
 
@@ -338,7 +416,10 @@ git push origin main  # 自動デプロイ → CloudFlare Pages
 - `functions/api/consignees.ts` - Consignees API with Address JOIN
 - `functions/api/products.ts` - Products API with filtering
 - `functions/api/stores.ts` - Stores API with carrier filtering
+- `functions/api/postal/search/[zipcode].ts` - Japan Post API integration for postal code lookup
 - `src/pages/Orders/OrderList.tsx` - Orders page with API integration
+- `src/components/AddressForm.tsx` - Address form with furigana auto-generation
+- `src/utils/furigana.ts` - Furigana generation utility (wanakana + dictionary)
 - `src/api/client.ts` - Frontend API client
 - `src/types/index.ts` - Complete TypeScript definitions
 - `migration/schema.sql` - D1 database schema
@@ -348,7 +429,7 @@ git push origin main  # 自動デプロイ → CloudFlare Pages
 ### Production Environment
 - **Live URL**: https://highlandirectweb.pages.dev/
 - **Database**: CloudFlare D1 `highlandirect-db` (remote)
-- **API Endpoints**: `/api/health`, `/api/orders`, `/api/shippers`, `/api/consignees`, `/api/products`, `/api/stores`
+- **API Endpoints**: `/api/health`, `/api/orders`, `/api/shippers`, `/api/consignees`, `/api/products`, `/api/stores`, `/api/postal/search/[zipcode]`
 - **Auto-deploy**: GitHub push → CloudFlare Pages
 - Path alias `@/` configured to point to `src/`
 
@@ -358,18 +439,44 @@ git push origin main  # 自動デプロイ → CloudFlare Pages
 - [x] **TypeScript完全移行**: CloudFlare Pages Functions JavaScript → TypeScript
 - [x] **全エンティティAPI実装**: Shippers, Consignees, Products, Stores のPages Functions実装完了
 - [x] **データベース最適化**: インデックス調整、クエリパフォーマンス改善完了
-- [ ] **フロントエンド-API連携**: 荷主・送付先・商品・集配所管理画面のモックデータからAPI連携に移行
-- [ ] **注文作成フォーム改善**: 実際のShipper/Consignee/Product選択機能
-- [ ] **ローカル開発環境の整備**: データベース連携した状態で動くようにする
+- [x] **日本郵便API統合**: 郵便番号検索機能の完全実装（OAuth認証、フォールバック機能）
+- [x] **フロントエンド-API連携**: 全マスタ管理画面のAPI連携完了（React Query、検索、ページネーション）
+- [x] **新規作成フォーム**: 全エンティティのPOST API連携完了（荷主・送付先・注文作成）
+- [x] **ローカル開発環境構築**: フルスタック開発環境（SQLite連携）完了
+- [ ] **注文作成フォーム改善**: 実際のShipper/Consignee/Product選択機能（ドロップダウン連携）
+- [ ] **住所入力フォーム統合**: 郵便番号検索をフロントエンドに統合
 
 ### 🎯 中優先度（Future Features）
-- [ ] **日本郵便API**: 郵便番号検索の本格実装（OAuth 2.0フロー完成済み）
-- [ ] **請求書作成**: 
+- [ ] **請求書作成・PDF出力機能**: 注文データから請求書を自動生成
+- [ ] **配送ラベル印刷**: ヤマトB2 API連携による配送ラベル出力
 
 ### 🌟 低優先度（Long-term Goals）
 - [ ] **ユーザー認証システム**: JWT認証 + ロール管理
-- [ ] **ヤマトB2 API**: 印刷機能連携
+- [ ] **リアルタイム通知**: WebSocket/Server-Sent Events
+- [ ] **配送状況追跡**: リアルタイム配送トラッキング
 - [ ] **テスト環境**: Jest/Vitest + E2Eテスト
+
+## 環境変数設定
+
+### CloudFlare Pages 環境変数
+以下の環境変数をCloudFlare Pagesプロジェクト設定で設定する必要があります：
+
+#### 日本郵便API（郵便番号検索）
+```
+JAPANPOST_API_HOST=api.da.pf.japanpost.jp
+JAPANPOST_CLIENT_ID=[日本郵便から提供されたクライアントID]
+JAPANPOST_CLIENT_SECRET=[日本郵便から提供されたクライアントシークレット]
+JAPANPOST_CLIENT_IP=[許可されたIPアドレス]
+```
+
+**注意**: フロントエンド用の `VITE_` プレフィックスは不要です。CloudFlare Pages Functionsでは直接環境変数名を使用します。
+
+### 環境変数更新後のデプロイ
+環境変数を変更した場合、以下のコマンドで強制デプロイできます：
+```bash
+git commit --allow-empty -m "Trigger deployment for environment variable update"
+git push origin main
+```
 
 ## テスト環境
 

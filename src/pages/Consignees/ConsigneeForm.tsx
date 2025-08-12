@@ -15,6 +15,7 @@ import { useForm, Controller } from 'react-hook-form'
 import { yupResolver } from '@hookform/resolvers/yup'
 import * as yup from 'yup'
 import { useSnackbar } from 'notistack'
+import axios from 'axios'
 
 import AddressForm from '@/components/AddressForm'
 import type { ConsigneeFormData } from '@/types'
@@ -90,16 +91,46 @@ const ConsigneeForm: React.FC = () => {
   const onSubmit = async (data: ConsigneeFormData) => {
     try {
       console.log('Submit data:', data)
-      // TODO: API送信
       
-      enqueueSnackbar(
-        isEdit ? '送付先情報を更新しました' : '送付先を作成しました',
-        { variant: 'success' }
-      )
+      if (isEdit) {
+        // TODO: PUT API for editing
+        enqueueSnackbar('送付先情報を更新しました', { variant: 'success' })
+      } else {
+        // POST API for creating new consignee
+        const response = await axios.post('/api/consignees', {
+          Name: data.Address.Name,
+          Furigana: data.Address.Furigana,
+          Keisho: data.Address.Keisho,
+          PostalCD: data.Address.PostalCD,
+          PrefectureName: data.Address.PrefectureName,
+          CityName: data.Address.CityName,
+          Address1: data.Address.Address1,
+          Address2: data.Address.Address2,
+          Phone: data.Address.Phone,
+          Fax: data.Address.Fax,
+          MailAddress: data.Address.MailAddress,
+          Memo: data.Address.Memo,
+          ConsigneeCode: data.ConsigneeCode,
+          DeliveryInstructions: data.DeliveryInstructions,
+          AccessInfo: data.AccessInfo,
+          PreferredDeliveryTime: data.PreferredDeliveryTime,
+          SpecialHandling: data.SpecialHandling,
+        })
+        
+        if (response.data.success) {
+          enqueueSnackbar('送付先を作成しました', { variant: 'success' })
+        } else {
+          throw new Error(response.data.error || '作成に失敗しました')
+        }
+      }
+      
       navigate('/consignees')
     } catch (error) {
       console.error('Error:', error)
-      enqueueSnackbar('エラーが発生しました', { variant: 'error' })
+      const errorMessage = axios.isAxiosError(error) 
+        ? error.response?.data?.error || error.message
+        : 'エラーが発生しました'
+      enqueueSnackbar(errorMessage, { variant: 'error' })
     }
   }
 

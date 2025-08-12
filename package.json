@@ -29,6 +29,7 @@
     "react-hook-form": "^7.48.0",
     "react-query": "^3.39.3",
     "react-router-dom": "^6.8.0",
+    "wanakana": "^5.3.1",
     "yup": "^1.4.0"
   },
   "devDependencies": {

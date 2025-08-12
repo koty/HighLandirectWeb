@@ -182,16 +182,44 @@ const OrderForm: React.FC = () => {
   const onSubmit = async (data: OrderFormData) => {
     try {
       console.log('Submit data:', data)
-      // TODO: API送信
       
-      enqueueSnackbar(
-        isEdit ? '注文を更新しました' : '注文を作成しました',
-        { variant: 'success' }
-      )
+      if (isEdit) {
+        // TODO: PUT API for editing
+        enqueueSnackbar('注文を更新しました', { variant: 'success' })
+      } else {
+        // Calculate total amount from order details
+        const totalAmount = orderDetails.reduce((sum, detail) => sum + (detail.unitPrice * detail.quantity), 0)
+        const totalQuantity = orderDetails.reduce((sum, detail) => sum + detail.quantity, 0)
+        
+        // POST API for creating new order
+        const response = await axios.post('/api/orders', {
+          ShipperId: selectedShipper?.ShipperId || 1,
+          ConsigneeId: selectedConsignee?.ConsigneeId || 1,
+          ProductId: selectedProduct?.ProductId || 1,
+          StoreId: selectedStore?.StoreId || 1,
+          Quantity: totalQuantity,
+          UnitPrice: totalAmount > 0 ? Math.round(totalAmount / totalQuantity) : 0,
+          TotalAmount: totalAmount,
+          OrderDate: data.orderDate?.format('YYYY-MM-DD') || new Date().toISOString().split('T')[0],
+          DeliveryDate: data.deliveryDate?.format('YYYY-MM-DD') || null,
+          SpecialInstructions: data.specialInstructions || null,
+          OrderStatus: '受付'
+        })
+        
+        if (response.data.success) {
+          enqueueSnackbar('注文を作成しました', { variant: 'success' })
+        } else {
+          throw new Error(response.data.error || '作成に失敗しました')
+        }
+      }
+      
       navigate('/orders')
     } catch (error) {
       console.error('Error:', error)
-      enqueueSnackbar('エラーが発生しました', { variant: 'error' })
+      const errorMessage = axios.isAxiosError(error) 
+        ? error.response?.data?.error || error.message
+        : 'エラーが発生しました'
+      enqueueSnackbar(errorMessage, { variant: 'error' })
     }
   }
 

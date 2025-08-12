@@ -7,6 +7,10 @@ binding = "DB"
 database_name = "highlandirect-db"
 database_id = "4c827b08-7b7c-484e-9d3b-6e6a153842bb"
 
+# Environment variables for Japan Post API
+[vars]
+JAPANPOST_API_HOST = "api.da.pf.japanpost.jp"
+
 # CloudFlare Pages Functions configuration
-# This file is used for D1 database configuration only
 # Pages Functions will automatically detect functions/ directory
+# For local development, run: npx wrangler pages dev dist --binding DB:local-db

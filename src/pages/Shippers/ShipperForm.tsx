@@ -15,6 +15,7 @@ import { useForm, Controller } from 'react-hook-form'
 import { yupResolver } from '@hookform/resolvers/yup'
 import * as yup from 'yup'
 import { useSnackbar } from 'notistack'
+import axios from 'axios'
 
 import AddressForm from '@/components/AddressForm'
 import type { ShipperFormData } from '@/types'
@@ -91,16 +92,45 @@ const ShipperForm: React.FC = () => {
   const onSubmit = async (data: ShipperFormData) => {
     try {
       console.log('Submit data:', data)
-      // TODO: API送信
       
-      enqueueSnackbar(
-        isEdit ? '荷主情報を更新しました' : '荷主を作成しました',
-        { variant: 'success' }
-      )
+      if (isEdit) {
+        // TODO: PUT API for editing
+        enqueueSnackbar('荷主情報を更新しました', { variant: 'success' })
+      } else {
+        // POST API for creating new shipper
+        const response = await axios.post('/api/shippers', {
+          Name: data.Address.Name,
+          Furigana: data.Address.Furigana,
+          Keisho: data.Address.Keisho,
+          PostalCD: data.Address.PostalCD,
+          PrefectureName: data.Address.PrefectureName,
+          CityName: data.Address.CityName,
+          Address1: data.Address.Address1,
+          Address2: data.Address.Address2,
+          Phone: data.Address.Phone,
+          Fax: data.Address.Fax,
+          MailAddress: data.Address.MailAddress,
+          Memo: data.Address.Memo,
+          ShipperCode: data.ShipperCode,
+          ShipperType: data.ShipperType,
+          CreditLimit: data.CreditLimit,
+          PaymentTerms: data.PaymentTerms,
+        })
+        
+        if (response.data.success) {
+          enqueueSnackbar('荷主を作成しました', { variant: 'success' })
+        } else {
+          throw new Error(response.data.error || '作成に失敗しました')
+        }
+      }
+      
       navigate('/shippers')
     } catch (error) {
       console.error('Error:', error)
-      enqueueSnackbar('エラーが発生しました', { variant: 'error' })
+      const errorMessage = axios.isAxiosError(error) 
+        ? error.response?.data?.error || error.message
+        : 'エラーが発生しました'
+      enqueueSnackbar(errorMessage, { variant: 'error' })
     }
   }
 
