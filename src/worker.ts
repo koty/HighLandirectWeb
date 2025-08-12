@@ -14,7 +14,7 @@ import { storesRoutes } from './routes/stores'
 import { postalRoutes } from './routes/postal'
 
 export interface Env {
-  DB: D1Database
+  DB: any // D1Database
   ENVIRONMENT: string
   JAPANPOST_API_HOST: string
   JAPANPOST_CLIENT_ID: string
