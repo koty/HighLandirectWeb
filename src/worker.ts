@@ -16,6 +16,10 @@ import { postalRoutes } from './routes/postal'
 export interface Env {
   DB: D1Database
   ENVIRONMENT: string
+  JAPANPOST_API_HOST: string
+  JAPANPOST_CLIENT_ID: string
+  JAPANPOST_CLIENT_SECRET: string
+  JAPANPOST_CLIENT_IP: string
 }
 
 const router = Router()
@@ -45,7 +49,7 @@ router.all('/api/postal/*', postalRoutes.handle)
 router.all('*', () => new Response('Not Found', { status: 404 }))
 
 export default {
-  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: any): Promise<Response> {
     try {
       return await router.handle(request, env, ctx)
     } catch (error) {

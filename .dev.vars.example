@@ -1,0 +1,9 @@
+# CloudFlare Workers local development environment variables
+# Copy this file to .dev.vars and fill in your actual values
+# .dev.vars is not tracked in git for security
+
+ENVIRONMENT=development
+JAPANPOST_API_HOST=stub-qz73x.da.pf.japanpost.jp
+JAPANPOST_CLIENT_ID=your_test_client_id
+JAPANPOST_CLIENT_SECRET=your_test_client_secret
+JAPANPOST_CLIENT_IP=127.0.0.1

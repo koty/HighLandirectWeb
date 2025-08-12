@@ -267,3 +267,9 @@ npm run deploy
 - Development: React runs on port 3000, Workers on port 8787
 - Path alias `@/` configured to point to `src/`
 - Mock data includes 5 addresses, 3 shippers, 3 consignees, 4 products, 3 stores, 5 orders
+- Frontend-Workers integration via Vite proxy (`/api` routes to `http://localhost:8787`)
+- Copy `.env.local.example` to `.env.local` for environment variables (Japan Post API credentials)
+
+## Testing
+
+Currently no testing framework is configured. When adding tests, check with the user for their preferred testing setup (Jest, Vitest, etc.).

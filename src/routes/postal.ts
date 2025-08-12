@@ -3,10 +3,10 @@ import type { Env } from '../worker'
 
 // 日本郵便 API 設定（環境変数から取得）
 const getAPIConfig = (env: Env) => ({
-  API_HOST: (env as any).JAPANPOST_API_HOST,
-  CLIENT_ID: (env as any).JAPANPOST_CLIENT_ID,
-  CLIENT_SECRET: (env as any).JAPANPOST_CLIENT_SECRET,
-  CLIENT_IP: (env as any).JAPANPOST_CLIENT_IP || '127.0.0.1',
+  API_HOST: env.JAPANPOST_API_HOST,
+  CLIENT_ID: env.JAPANPOST_CLIENT_ID,
+  CLIENT_SECRET: env.JAPANPOST_CLIENT_SECRET,
+  CLIENT_IP: env.JAPANPOST_CLIENT_IP || '127.0.0.1',
 })
 
 // トークン管理
@@ -24,6 +24,12 @@ const getAccessToken = async (env: Env): Promise<string> => {
   }
 
   const config = getAPIConfig(env)
+  console.log('Environment variables:', {
+    JAPANPOST_API_HOST: env.JAPANPOST_API_HOST,
+    JAPANPOST_CLIENT_ID: env.JAPANPOST_CLIENT_ID,
+    JAPANPOST_CLIENT_SECRET: env.JAPANPOST_CLIENT_SECRET ? '[PRESENT]' : '[MISSING]',
+    JAPANPOST_CLIENT_IP: env.JAPANPOST_CLIENT_IP
+  })
   const TOKEN_URL = `https://${config.API_HOST}/api/v1/j/token`
 
   const tokenRequest = {

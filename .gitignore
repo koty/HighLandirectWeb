@@ -117,7 +117,7 @@ Thumbs.db
 # CloudFlare Workers
 .wrangler/
 wrangler.toml.bak
-wrangler.toml
+.dev.vars
 
 # Database files
 *.sqlite
