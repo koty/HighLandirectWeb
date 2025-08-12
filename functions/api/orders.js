@@ -26,7 +26,7 @@ async function getOrders(env, { page = 1, limit = 10, status = null } = {}) {
     LEFT JOIN Consignee c ON o.ConsigneeId = c.ConsigneeId
     LEFT JOIN Address ca ON c.AddressId = ca.AddressId
     LEFT JOIN ProductMaster pm ON o.ProductId = pm.ProductId
-    WHERE o.IsActive = 1
+    WHERE 1 = 1
   `;
 
   const params = [];
@@ -50,7 +50,7 @@ async function getOrders(env, { page = 1, limit = 10, status = null } = {}) {
 }
 
 async function getOrdersCount(env, { status = null } = {}) {
-  let query = `SELECT COUNT(*) as total FROM "Order" WHERE IsActive = 1`;
+  let query = `SELECT COUNT(*) as total FROM "Order" WHERE 1 = 1`;
   const params = [];
   
   if (status) {
