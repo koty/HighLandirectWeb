@@ -28,8 +28,9 @@ import dayjs, { Dayjs } from 'dayjs'
 import { useSnackbar } from 'notistack'
 import DeleteIcon from '@mui/icons-material/Delete'
 
-import type { OrderFormData, OrderDetail, Shipper, Consignee, Product, Store, Order } from '@/types'
-import { mockShippers, mockConsignees, mockProducts, mockStores, mockOrders } from '@/data/mockData'
+import type { OrderFormData, OrderDetail, Shipper, Consignee, ProductMaster, Store, Order } from '@/types'
+import { useQuery } from 'react-query'
+import axios from 'axios'
 
 const schema = yup.object({
   OrderDate: yup.string().required('注文日は必須です'),
@@ -53,11 +54,32 @@ const OrderForm: React.FC = () => {
   const { enqueueSnackbar } = useSnackbar()
   const isEdit = Boolean(id)
 
-  // モックデータを使用
-  const [shippers] = useState<Shipper[]>(mockShippers)
-  const [consignees] = useState<Consignee[]>(mockConsignees)
-  const [products] = useState<Product[]>(mockProducts)
-  const [stores] = useState<Store[]>(mockStores)
+  // APIからデータを取得
+  const { data: shippersData } = useQuery('shippers-all', async () => {
+    const response = await axios.get('/api/shippers', { params: { limit: 1000 } })
+    return response.data
+  })
+
+  const { data: consigneesData } = useQuery('consignees-all', async () => {
+    const response = await axios.get('/api/consignees', { params: { limit: 1000 } })
+    return response.data
+  })
+
+  const { data: productsData } = useQuery('products-all', async () => {
+    const response = await axios.get('/api/products', { params: { limit: 1000 } })
+    return response.data
+  })
+
+  const { data: storesData } = useQuery('stores-all', async () => {
+    const response = await axios.get('/api/stores', { params: { limit: 1000 } })
+    return response.data
+  })
+
+  const shippers = shippersData?.data || []
+  const consignees = consigneesData?.data || []
+  const products = productsData?.data || []
+  const stores = storesData?.data || []
+
   const [shipperHistory, setShipperHistory] = useState<Order[]>([])
 
   const {
@@ -87,11 +109,23 @@ const OrderForm: React.FC = () => {
   // 荷主選択時に送付履歴を取得
   useEffect(() => {
     if (watchedShipperId && typeof watchedShipperId === 'number') {
-      // 選択された荷主の送付履歴を取得（新しい順）
-      const history = mockOrders
-        .filter(order => order.ShipperId === watchedShipperId)
-        .sort((a, b) => new Date(b.OrderDate).getTime() - new Date(a.OrderDate).getTime())
-      setShipperHistory(history)
+      // APIから選択された荷主の送付履歴を取得
+      const fetchHistory = async () => {
+        try {
+          const response = await axios.get('/api/orders', {
+            params: {
+              page: 1,
+              limit: 50,
+              shipperId: watchedShipperId
+            }
+          })
+          setShipperHistory(response.data.data || [])
+        } catch (error) {
+          console.error('Error fetching shipper history:', error)
+          setShipperHistory([])
+        }
+      }
+      fetchHistory()
     } else {
       setShipperHistory([])
     }
@@ -206,7 +240,7 @@ const OrderForm: React.FC = () => {
                         field.onChange(shipper?.ShipperId || '')
                       }}
                       options={shippers}
-                      getOptionLabel={(option) => `${option.Address?.Name} (${option.ShipperCode})`}
+                      getOptionLabel={(option) => `${option.Name} (${option.ShipperCode})`}
                       renderInput={(params) => (
                         <TextField
                           {...params}
@@ -245,7 +279,7 @@ const OrderForm: React.FC = () => {
                           {watchedOrderDetails.map((detail) => (
                             <TableRow key={detail.id}>
                               <TableCell>
-                                {detail.Consignee?.Address?.Name || '-'}
+                                {detail.Consignee?.Name || '-'}
                                 <br />
                                 <Typography variant="caption" color="text.secondary">
                                   {detail.Consignee?.ConsigneeCode}
@@ -319,7 +353,7 @@ const OrderForm: React.FC = () => {
                 
                 <Autocomplete
                   options={consignees}
-                  getOptionLabel={(option) => `${option.Address?.Name} (${option.ConsigneeCode})`}
+                  getOptionLabel={(option) => `${option.Name} (${option.ConsigneeCode})`}
                   renderInput={(params) => (
                     <TextField
                       {...params}
@@ -462,8 +496,8 @@ const OrderForm: React.FC = () => {
                       </TableCell>
                       <TableCell>{order.OrderNumber}</TableCell>
                       <TableCell>{order.OrderDate}</TableCell>
-                      <TableCell>{order.Consignee?.Address?.Name || '-'}</TableCell>
-                      <TableCell>{order.Product?.ProductName || '-'}</TableCell>
+                      <TableCell>{order.ConsigneeName || '-'}</TableCell>
+                      <TableCell>{order.ProductName || '-'}</TableCell>
                       <TableCell>{order.Quantity}</TableCell>
                       <TableCell>¥{order.TotalAmount?.toLocaleString() || 0}</TableCell>
                     </TableRow>

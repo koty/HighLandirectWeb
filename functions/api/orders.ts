@@ -1,14 +1,26 @@
 // CloudFlare Pages Function: Orders API with D1 Database
+import { EventContext, Env, CORS_HEADERS, ApiResponse } from '../types';
 
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-  'Content-Type': 'application/json'
-};
+interface Order {
+  OrderID: number;
+  OrderNumber: string;
+  OrderDate: string;
+  OrderStatus: string;
+  TotalAmount: number;
+  Quantity: number;
+  ShipperName: string;
+  ConsigneeName: string;
+  ProductName: string;
+}
+
+interface OrderQueryParams {
+  page?: number;
+  limit?: number;
+  status?: string | null;
+}
 
 // Database query helpers
-async function getOrders(env, { page = 1, limit = 10, status = null } = {}) {
+async function getOrders(env: Env, { page = 1, limit = 10, status = null }: OrderQueryParams = {}): Promise<{ orders: Order[], total: number }> {
   let query = `
     SELECT 
       o.OrderId as OrderID,
@@ -62,7 +74,17 @@ async function getOrdersCount(env, { status = null } = {}) {
   return results[0]?.total || 0;
 }
 
-async function createOrder(env, orderData) {
+interface CreateOrderData {
+  ShipperId?: number;
+  ConsigneeId?: number;
+  ProductId?: number;
+  StoreId?: number;
+  Quantity?: number;
+  UnitPrice?: number;
+  TotalAmount?: number;
+}
+
+async function createOrder(env: Env, orderData: CreateOrderData): Promise<Order> {
   const orderNumber = `ORD-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`;
   
   const query = `
@@ -112,7 +134,7 @@ async function createOrder(env, orderData) {
   return results[0];
 }
 
-export async function onRequest(context) {
+export async function onRequest(context: EventContext<Env>): Promise<Response> {
   const { request, env } = context;
   const url = new URL(request.url);
   

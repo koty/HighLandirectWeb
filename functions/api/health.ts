@@ -1,5 +1,7 @@
 // CloudFlare Pages Function: Health check
-export async function onRequest(context) {
+import { EventContext, Env, CORS_HEADERS } from '../types';
+
+export async function onRequest(context: EventContext<Env>): Promise<Response> {
   return new Response(JSON.stringify({
     status: 'ok',
     timestamp: new Date().toISOString(),
@@ -7,9 +9,7 @@ export async function onRequest(context) {
   }), {
     headers: {
       'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+      ...CORS_HEADERS
     }
   });
 }
