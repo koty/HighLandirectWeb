@@ -23,11 +23,13 @@ export const validatePostalCode = (postalCode: string): boolean => {
   return /^\d{7}$/.test(cleaned)
 }
 
-// 内部APIレスポンス型
+// APIレスポンス構造
 interface PostalApiResponse {
   success: boolean
   data?: JapanPostAddress
   error?: string
+  source?: string
+  fallback_reason?: string
 }
 
 // 郵便番号から住所を検索する関数
@@ -60,6 +62,7 @@ export const searchAddressByPostalCode = async (
       throw new Error(data.error || '該当する住所が見つかりませんでした')
     }
 
+    console.log('Postal API response:', data)
     return data.data
   } catch (error) {
     console.error('郵便番号検索エラー:', error)

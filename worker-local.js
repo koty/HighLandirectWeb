@@ -181,7 +181,7 @@ router.get('/api/orders', async (request, env) => {
   
   let query = `
     SELECT 
-      o.OrderId,
+      o.OrderId as OrderID,
       o.OrderNumber,
       o.OrderDate,
       o.ShipperId,
@@ -661,27 +661,64 @@ router.get('/api/postal/search/:zipcode', async (request, env) => {
 
     const searchData = await searchResponse.json()
     
+    // Convert to consistent format if needed
+    let address
+    if (searchData.addresses && searchData.addresses.length > 0) {
+      address = searchData.addresses[0]
+    } else {
+      throw new Error('No addresses found in API response')
+    }
+    
     return new Response(JSON.stringify({
       success: true,
-      data: searchData
+      data: address,
+      source: 'japan_post_api'
     }), {
       headers: { 'Content-Type': 'application/json', ...CORS_HEADERS }
     })
 
   } catch (error) {
-    console.error('Postal API error:', error)
+    console.error('Postal API error, using fallback:', error)
     
-    // Return mock data as fallback
+    // Mock data mapping for common postal codes
+    const mockData = new Map([
+      ['1000001', { pref: '東京都', city: '千代田区', town: '千代田' }],
+      ['1000005', { pref: '東京都', city: '千代田区', town: '丸の内' }],
+      ['1000014', { pref: '東京都', city: '千代田区', town: '永田町' }],
+      ['1050011', { pref: '東京都', city: '港区', town: '芝公園' }],
+      ['1500043', { pref: '東京都', city: '渋谷区', town: '道玄坂' }],
+      ['1600023', { pref: '東京都', city: '新宿区', town: '西新宿' }],
+      ['5300001', { pref: '大阪府', city: '大阪市北区', town: '梅田' }],
+      ['5300047', { pref: '大阪府', city: '大阪市北区', town: '西天満' }],
+      ['5410041', { pref: '大阪府', city: '大阪市中央区', town: '北浜' }],
+      ['4600002', { pref: '愛知県', city: '名古屋市中区', town: '丸の内' }],
+      ['4600003', { pref: '愛知県', city: '名古屋市中区', town: '錦' }],
+      ['4600008', { pref: '愛知県', city: '名古屋市中区', town: '栄' }],
+      ['2310023', { pref: '神奈川県', city: '横浜市中区', town: '山下町' }],
+      ['6020911', { pref: '京都府', city: '京都市上京区', town: '烏丸通' }],
+      ['8120011', { pref: '福岡県', city: '福岡市博多区', town: '博多駅前' }],
+      ['3812204', { pref: '長野県', city: '長野市', town: '真島町真島' }]
+    ])
+    
+    const addressInfo = mockData.get(zipcode) || { pref: '東京都', city: '港区', town: '新橋' }
+    const mockAddress = {
+      dgacode: zipcode,
+      zip_code: `${zipcode.slice(0, 3)}-${zipcode.slice(3)}`,
+      pref_name: addressInfo.pref,
+      city_name: addressInfo.city,
+      town_name: addressInfo.town,
+      street_name: '1丁目',
+      building_name: '',
+      pref_kana: 'カナ',
+      city_kana: 'カナ',
+      town_kana: 'カナ'
+    }
+    
     return new Response(JSON.stringify({
       success: true,
-      data: {
-        result: [{
-          zipcode: zipcode,
-          prefecture_name: '栃木県',
-          city_name: '那須郡那珂川町',
-          address_name: '和見'
-        }]
-      }
+      data: mockAddress,
+      source: 'mock_data',
+      fallback_reason: error instanceof Error ? error.message : 'API error'
     }), {
       headers: { 'Content-Type': 'application/json', ...CORS_HEADERS }
     })

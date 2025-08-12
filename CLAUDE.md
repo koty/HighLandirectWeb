@@ -319,6 +319,16 @@ MigrationTool.exe "MyData.sdf" "new.sqlite"
 - [x] 商品データを果物に変更（りんご・桃の5kg・10kg、初期データファイル更新）
 - [x] フロントエンド-APIクライアント連携の完全実装
 
+### Phase 14: 郵便番号検索統合・UI改善 ✅完了
+- [x] AddressFormに郵便番号検索API統合済み確認
+- [x] postalCodeApi.tsのAPIレスポンス構造修正（本番環境対応）
+- [x] ローカル環境APIレスポンス構造を本番環境と統一
+- [x] ShipperForm・ConsigneeFormでの郵便番号検索動作確認
+- [x] モックデータ・非モック両対応の確認（フォールバック機能）
+- [x] MUI DataGrid OrderID問題修正（ローカル・本番環境統一）
+- [x] 7桁自動検索・手動検索ボタン・エラーハンドリング完備
+- [x] 住所自動入力機能（都道府県・市区町村・住所1）完全動作
+
 ## 現在の状態（2025年8月12日時点）
 
 ### 🚀 本番稼働中
@@ -349,6 +359,7 @@ MigrationTool.exe "MyData.sdf" "new.sqlite"
    - **商品管理**: API連携完了（果物商品対応、検索・ページネーション・リアルタイム更新）
    - **集配所管理**: API連携完了（検索・ページネーション・リアルタイム更新）
    - **ふりがな自動生成**: 氏名・会社名入力時の即座変換（wanakana + 辞書システム）
+   - **郵便番号検索統合**: AddressFormに完全統合（7桁自動検索・手動検索ボタン・エラーハンドリング・住所自動入力）
    - **ダッシュボード**: 統計表示
    - **レスポンシブUI**: 全デバイス対応
 
@@ -378,11 +389,9 @@ curl "https://highlandirectweb.pages.dev/api/postal/search/3812204"  # 長野県
 ```
 
 ### 🔜 次期実装予定
-1. **注文作成フォーム改善**: 実際のShipper/Consignee/Product選択機能
-2. **住所入力フォーム統合**: 郵便番号検索APIをフロントエンドフォームに統合
-3. **新規作成フォーム**: Shipper/Consignee/Product/Store の作成フォーム実装
-4. **ヤマトB2 API**: 印刷機能
-5. **ユーザー認証**: 権限管理システム
+1. **ヤマトB2 API**: 印刷機能（配送ラベル印刷）
+2. **ユーザー認証**: 権限管理システム
+3. **請求書作成・PDF出力機能**: 注文データから請求書を自動生成
 
 ## 🏆 技術的達成
 - **完全なフルスタックWebアプリケーション**
@@ -441,8 +450,9 @@ git push origin main  # 自動デプロイ → CloudFlare Pages
 - `functions/api/stores.ts` - Stores API with carrier filtering
 - `functions/api/postal/search/[zipcode].ts` - Japan Post API integration for postal code lookup
 - `src/pages/Orders/OrderList.tsx` - Orders page with API integration
-- `src/components/AddressForm.tsx` - Address form with furigana auto-generation
+- `src/components/AddressForm.tsx` - Address form with furigana auto-generation and postal code search integration
 - `src/utils/furigana.ts` - Furigana generation utility (wanakana + dictionary)
+- `src/utils/postalCodeApi.ts` - Postal code search utility with Japan Post API integration
 - `src/api/client.ts` - Frontend API client
 - `src/types/index.ts` - Complete TypeScript definitions
 - `migration/schema.sql` - D1 database schema
@@ -467,7 +477,7 @@ git push origin main  # 自動デプロイ → CloudFlare Pages
 - [x] **新規作成フォーム**: 全エンティティのPOST API連携完了（荷主・送付先・注文作成）
 - [x] **ローカル開発環境構築**: フルスタック開発環境（SQLite連携）完了
 - [x] **注文作成フォーム改善**: 実際のShipper/Consignee/Product選択機能（ドロップダウン連携）完了
-- [ ] **住所入力フォーム統合**: 郵便番号検索をフロントエンドに統合
+- [x] **住所入力フォーム統合**: 郵便番号検索をフロントエンドに統合（7桁自動検索、手動検索ボタン、エラーハンドリング、住所自動入力完了）
 
 ### 🎯 中優先度（Future Features）
 - [ ] **請求書作成・PDF出力機能**: 注文データから請求書を自動生成
