@@ -30,6 +30,13 @@ export async function onRequestGet(context: EventContext<Env>): Promise<Response
   const { request, env } = context;
   const url = new URL(request.url);
 
+  // CORS headers
+  const corsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  };
+
   try {
     // Parse query parameters
     const page = parseInt(url.searchParams.get('page')) || 1;
