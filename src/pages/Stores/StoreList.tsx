@@ -5,7 +5,7 @@ import { DataGrid, GridColDef } from '@mui/x-data-grid'
 import { useQuery } from 'react-query'
 import axios from 'axios'
 
-import { Store } from '@/types'
+// Store type is no longer needed as individual import
 
 const StoreList: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('')

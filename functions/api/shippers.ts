@@ -15,12 +15,6 @@ interface Shipper {
   Fax?: string;
   MailAddress?: string;
   Memo?: string;
-  ShipperCode?: string;
-  ShipperType?: string;
-  ContractStartDate?: string;
-  ContractEndDate?: string;
-  CreditLimit?: number;
-  PaymentTerms?: string;
   IsActive: number;
   CreatedAt: string;
   UpdatedAt: string;
@@ -74,12 +68,6 @@ export async function onRequestGet(context: EventContext<Env>): Promise<Response
         a.Fax,
         a.MailAddress,
         a.Memo,
-        s.ShipperCode,
-        s.ShipperType,
-        s.ContractStartDate,
-        s.ContractEndDate,
-        s.CreditLimit,
-        s.PaymentTerms,
         s.IsActive,
         s.CreatedAt,
         s.UpdatedAt
@@ -202,17 +190,12 @@ export async function onRequestPost(context) {
 
     // Create shipper record
     const shipperQuery = `
-      INSERT INTO Shipper (AddressId, ShipperCode, ShipperType, ContractStartDate, CreditLimit, PaymentTerms) 
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO Shipper (AddressId) 
+      VALUES (?)
     `;
 
     const shipperResult = await env.DB.prepare(shipperQuery).bind(
-      addressId,
-      data.ShipperCode || null,
-      data.ShipperType || null,
-      data.ContractStartDate || null,
-      data.CreditLimit || null,
-      data.PaymentTerms || null
+      addressId
     ).run();
 
     if (!shipperResult.success) {

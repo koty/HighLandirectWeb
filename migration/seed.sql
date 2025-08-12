@@ -9,32 +9,32 @@ INSERT INTO Address (AddressId, Name, Furigana, PostalCD, PrefectureName, CityNa
 (5, '田中花子', 'タナカハナコ', '2310023', '神奈川県', '横浜市中区', '山下町1-1-1', '045-123-4567', 1);
 
 -- 荷主データ
-INSERT INTO Shipper (ShipperId, AddressId, ShipperCode, ShipperType, CreditLimit, PaymentTerms, IsActive) VALUES
-(1, 1, 'SHP001', '法人', 1000000, '月末締め翌月末払い', 1),
-(2, 2, 'SHP002', '法人', 500000, '月末締め翌月末払い', 1),
-(3, 3, 'SHP003', '法人', 300000, '現金払い', 1);
+INSERT INTO Shipper (ShipperId, AddressId, IsActive) VALUES
+(1, 1, 1),
+(2, 2, 1),
+(3, 3, 1);
 
 -- 送付先データ
-INSERT INTO Consignee (ConsigneeId, AddressId, ConsigneeCode, DeliveryInstructions, PreferredDeliveryTime, IsActive) VALUES
-(1, 4, 'CNS001', '午前中希望', '午前', 1),
-(2, 5, 'CNS002', '在宅確認後配送', '夜間', 1),
-(3, 2, 'CNS003', '法人配送・受付まで', '指定なし', 1);
+INSERT INTO Consignee (ConsigneeId, AddressId, IsActive) VALUES
+(1, 4, 1),
+(2, 5, 1),
+(3, 2, 1);
 
 -- 商品データ
-INSERT INTO ProductMaster (ProductId, ProductCode, ProductName, ProductCategory, UnitPrice, Weight, IsFragile, IsDefault, IsActive) VALUES
-(1, 'APPLE5', 'りんご 5kg', '果物', 2500, 5.0, 1, 1, 1),
-(2, 'APPLE10', 'りんご 10kg', '果物', 4500, 10.0, 1, 0, 1),
-(3, 'PEACH5', '桃 5kg', '果物', 3500, 5.0, 1, 0, 1),
-(4, 'PEACH10', '桃 10kg', '果物', 6500, 10.0, 1, 0, 1);
+INSERT INTO ProductMaster (ProductId, ProductName, UnitPrice, IsDefault, IsActive) VALUES
+(1, 'りんご 5kg', 2500, 1, 1),
+(2, 'りんご 10kg', 4500, 0, 1),
+(3, '桃 5kg', 3500, 0, 1),
+(4, '桃 10kg', 6500, 0, 1);
 
 -- 集配所データ
-INSERT INTO Store (StoreId, StoreCode, StoreName, CarrierCode, CarrierName, ContactPhone, ServiceArea, CutoffTime, IsDefault, IsActive) VALUES
-(1, 'ST001', '東京主管支店', 'YAMATO', 'ヤマト運輸', '03-0000-1111', '東京都心部', '17:00', 1, 1),
-(2, 'ST002', '大阪主管支店', 'YAMATO', 'ヤマト運輸', '06-0000-2222', '大阪府全域', '17:00', 0, 1),
-(3, 'ST003', '名古屋主管支店', 'YAMATO', 'ヤマト運輸', '052-000-3333', '愛知県全域', '16:30', 0, 1);
+INSERT INTO Store (StoreId, StoreName, IsDefault, IsActive) VALUES
+(1, '東京主管支店', 1, 1),
+(2, '大阪主管支店', 0, 1),
+(3, '名古屋主管支店', 0, 1);
 
 -- 注文データ
-INSERT INTO "Order" (OrderId, OrderNumber, OrderDate, ShipperId, ConsigneeId, ProductId, StoreId, Quantity, UnitPrice, TotalAmount, OrderStatus) VALUES
-(1, 'ORD-2024-001', '2024-01-15', 1, 1, 1, 1, 1, 2500, 2500, '完了'),
-(2, 'ORD-2024-002', '2024-01-16', 2, 3, 4, 2, 2, 6500, 13000, '受付'),
-(3, 'ORD-2024-003', '2024-01-17', 3, 1, 3, 3, 1, 3500, 3500, '完了');
+INSERT INTO "Order" (OrderId, OrderDate, ShipperId, ConsigneeId, ProductId, StoreId, Quantity, UnitPrice, TotalAmount) VALUES
+(1, '2024-01-15', 1, 1, 1, 1, 1, 2500, 2500),
+(2, '2024-01-16', 2, 3, 4, 2, 2, 6500, 13000),
+(3, '2024-01-17', 3, 1, 3, 3, 1, 3500, 3500);

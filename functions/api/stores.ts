@@ -30,14 +30,9 @@ export async function onRequestGet(context) {
     }
 
     if (search) {
-      whereConditions.push('(StoreName LIKE ? OR StoreCode LIKE ? OR ServiceArea LIKE ?)');
+      whereConditions.push('StoreName LIKE ?');
       const searchTerm = `%${search}%`;
-      searchParams.push(searchTerm, searchTerm, searchTerm);
-    }
-
-    if (carrier) {
-      whereConditions.push('CarrierCode = ?');
-      searchParams.push(carrier);
+      searchParams.push(searchTerm);
     }
 
     const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
@@ -46,14 +41,7 @@ export async function onRequestGet(context) {
     const query = `
       SELECT 
         StoreId,
-        StoreCode,
         StoreName,
-        CarrierCode,
-        CarrierName,
-        RegionCode,
-        ContactPhone,
-        ServiceArea,
-        CutoffTime,
         IsDefault,
         IsActive,
         CreatedAt,
@@ -83,16 +71,8 @@ export async function onRequestGet(context) {
     const countResult = await env.DB.prepare(countQuery).bind(...searchParams).first();
     const total = countResult?.total || 0;
 
-    // Get carriers for filtering
-    const carriersQuery = `
-      SELECT DISTINCT CarrierCode, CarrierName
-      FROM Store
-      WHERE IsActive = 1 AND CarrierCode IS NOT NULL
-      ORDER BY CarrierName ASC
-    `;
-    
-    const carriersResult = await env.DB.prepare(carriersQuery).all();
-    const carriers = carriersResult.results || [];
+    // No carriers since CarrierCode and CarrierName columns were removed
+    const carriers = [];
 
     console.log('Stores query result:', result.results?.length, 'rows, total:', total);
 
@@ -144,9 +124,9 @@ export async function onRequestPost(context) {
     console.log('Creating new store:', data);
 
     // Validate required fields
-    if (!data.StoreName || !data.CarrierCode || !data.CarrierName) {
+    if (!data.StoreName) {
       return new Response(JSON.stringify({
-        error: 'StoreName, CarrierCode, and CarrierName are required'
+        error: 'StoreName is required'
       }), {
         status: 400,
         headers: {
@@ -159,20 +139,12 @@ export async function onRequestPost(context) {
     // Create store record
     const query = `
       INSERT INTO Store (
-        StoreCode, StoreName, CarrierCode, CarrierName, RegionCode,
-        ContactPhone, ServiceArea, CutoffTime, IsDefault, IsActive
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        StoreName, IsDefault, IsActive
+      ) VALUES (?, ?, ?)
     `;
 
     const result = await env.DB.prepare(query).bind(
-      data.StoreCode || null,
       data.StoreName,
-      data.CarrierCode,
-      data.CarrierName,
-      data.RegionCode || null,
-      data.ContactPhone || null,
-      data.ServiceArea || null,
-      data.CutoffTime || null,
       data.IsDefault ? 1 : 0,
       data.IsActive !== undefined ? (data.IsActive ? 1 : 0) : 1
     ).run();

@@ -37,8 +37,6 @@ const schema = yup.object({
   OrderDate: yup.string().required('注文日は必須です'),
   ShipperId: yup.mixed<number | ''>().required('荷主を選択してください'),
   StoreId: yup.mixed<number | ''>().required('集配所を選択してください'),
-  RequestedDeliveryDate: yup.string(),
-  SpecialInstructions: yup.string(),
   OrderDetails: yup.array().of(
     yup.object({
       id: yup.string().required(),
@@ -91,8 +89,6 @@ const OrderForm: React.FC = () => {
       OrderDate: dayjs().format('YYYY-MM-DD'),
       ShipperId: '',
       StoreId: '',
-      RequestedDeliveryDate: '',
-      SpecialInstructions: '',
       OrderDetails: [],
     },
   })
@@ -218,10 +214,7 @@ const OrderForm: React.FC = () => {
             Quantity: detail.Quantity,
             UnitPrice: detail.UnitPrice || 0,
             TotalAmount: totalAmount,
-            OrderDate: data.OrderDate,
-            DeliveryDate: data.RequestedDeliveryDate || null,
-            SpecialInstructions: data.SpecialInstructions || null,
-            OrderStatus: '受付'
+            OrderDate: data.OrderDate
           })
         })
 
@@ -449,43 +442,6 @@ const OrderForm: React.FC = () => {
                 />
               </Grid>
 
-              <Grid item xs={12} md={6}>
-                <Controller
-                  name="RequestedDeliveryDate"
-                  control={control}
-                  render={({ field }) => (
-                    <DatePicker
-                      label="希望配送日"
-                      value={field.value ? dayjs(field.value) : null}
-                      onChange={(date: Dayjs | null) => {
-                        field.onChange(date ? date.format('YYYY-MM-DD') : '')
-                      }}
-                      slotProps={{
-                        textField: {
-                          fullWidth: true,
-                        },
-                      }}
-                    />
-                  )}
-                />
-              </Grid>
-
-              <Grid item xs={12}>
-                <Controller
-                  name="SpecialInstructions"
-                  control={control}
-                  render={({ field }) => (
-                    <TextField
-                      {...field}
-                      fullWidth
-                      label="メモ"
-                      multiline
-                      rows={3}
-                      placeholder="配送に関するメモがあれば記入してください"
-                    />
-                  )}
-                />
-              </Grid>
 
               <Grid item xs={12}>
                 <Box display="flex" gap={2} justifyContent="flex-end">
@@ -545,9 +501,8 @@ const OrderForm: React.FC = () => {
                           disabled={!order.Consignee}
                         />
                       </TableCell>
-                      <TableCell>{order.OrderNumber}</TableCell>
                       <TableCell>{order.OrderDate}</TableCell>
-                      <TableCell>{order.Consignee?.Name || '-'}</TableCell>
+                      <TableCell>{order.Consignee?.Address?.Name || '-'}</TableCell>
                       <TableCell>{order.Product?.ProductName || '-'}</TableCell>
                       <TableCell>{order.Quantity}</TableCell>
                       <TableCell>¥{order.TotalAmount?.toLocaleString() || 0}</TableCell>

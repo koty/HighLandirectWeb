@@ -28,12 +28,6 @@ export interface Address {
 export interface Shipper {
   ShipperId: number;
   AddressId: number;
-  ShipperCode?: string;
-  ShipperType?: string;
-  ContractStartDate?: string;
-  ContractEndDate?: string;
-  CreditLimit?: number;
-  PaymentTerms?: string;
   IsActive: boolean;
   CreatedAt: string;
   UpdatedAt: string;
@@ -43,11 +37,6 @@ export interface Shipper {
 export interface Consignee {
   ConsigneeId: number;
   AddressId: number;
-  ConsigneeCode?: string;
-  DeliveryInstructions?: string;
-  AccessInfo?: string;
-  PreferredDeliveryTime?: string;
-  SpecialHandling?: string;
   IsActive: boolean;
   CreatedAt: string;
   UpdatedAt: string;
@@ -56,14 +45,8 @@ export interface Consignee {
 
 export interface Product {
   ProductId: number;
-  ProductCode?: string;
   ProductName: string;
-  ProductCategory?: string;
   UnitPrice: number;
-  TaxRate: number;
-  Weight?: number;
-  Dimensions?: string;
-  IsFragile: boolean;
   IsDefault: boolean;
   IsActive: boolean;
   CreatedAt: string;
@@ -72,14 +55,7 @@ export interface Product {
 
 export interface Store {
   StoreId: number;
-  StoreCode?: string;
   StoreName?: string;
-  CarrierCode?: string;
-  CarrierName?: string;
-  RegionCode?: string;
-  ContactPhone?: string;
-  ServiceArea?: string;
-  CutoffTime?: string;
   IsDefault: boolean;
   IsActive: boolean;
   CreatedAt: string;
@@ -88,7 +64,6 @@ export interface Store {
 
 export interface Order {
   OrderId: number;
-  OrderNumber?: string;
   OrderDate: string;
   ShipperId: number;
   ConsigneeId: number;
@@ -97,15 +72,9 @@ export interface Order {
   Quantity: number;
   UnitPrice?: number;
   TotalAmount?: number;
-  OrderStatus: 'pending' | 'processing' | 'completed' | 'cancelled';
-  RequestedDeliveryDate?: string;
-  ActualDeliveryDate?: string;
   TrackingNumber?: string;
-  SpecialInstructions?: string;
   CreatedAt: string;
   UpdatedAt: string;
-  CreatedBy?: string;
-  UpdatedBy?: string;
   Shipper?: Shipper;
   Consignee?: Consignee;
   Product?: Product;
@@ -115,12 +84,7 @@ export interface Order {
 export interface OrderHistory {
   OrderHistoryId: number;
   OrderId: number;
-  StatusChange?: string;
-  PreviousStatus?: string;
-  NewStatus?: string;
-  Notes?: string;
   ChangedAt: string;
-  ChangedBy?: string;
 }
 
 export interface ReportMemo {
@@ -164,8 +128,6 @@ export interface OrderFormData {
   OrderDate: string;
   ShipperId: number | '';
   StoreId: number | '';
-  RequestedDeliveryDate?: string;
-  SpecialInstructions?: string;
   OrderDetails: OrderDetail[]; // 注文明細配列
 }
 
@@ -191,22 +153,11 @@ export interface AddressFormData {
 
 export interface ShipperFormData {
   Address: AddressFormData & { IsActive: boolean };
-  ShipperCode?: string;
-  ShipperType?: string;
-  ContractStartDate?: string;
-  ContractEndDate?: string;
-  CreditLimit?: number;
-  PaymentTerms?: string;
   IsActive: boolean;
 }
 
 export interface ConsigneeFormData {
   Address: AddressFormData & { IsActive: boolean };
-  ConsigneeCode?: string;
-  DeliveryInstructions?: string;
-  AccessInfo?: string;
-  PreferredDeliveryTime?: string;
-  SpecialHandling?: string;
   IsActive: boolean;
 }
 

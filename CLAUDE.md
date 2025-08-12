@@ -329,6 +329,20 @@ MigrationTool.exe "MyData.sdf" "new.sqlite"
 - [x] 7桁自動検索・手動検索ボタン・エラーハンドリング完備
 - [x] 住所自動入力機能（都道府県・市区町村・住所1）完全動作
 
+### Phase 15: 荷主・送付先編集機能実装 ✅完了
+- [x] 個別取得API実装（GET /api/shippers/:id, GET /api/consignees/:id）
+- [x] 更新API実装（PUT /api/shippers/:id, PUT /api/consignees/:id）
+- [x] CloudFlare Pages Functions動的ルーティング対応（[id].ts）
+- [x] ShipperForm編集モード対応（既存データ読み込み・PUT API連携）
+- [x] ConsigneeForm編集モード対応（既存データ読み込み・PUT API連携）
+- [x] React Query使用によるデータ取得・キャッシュ管理
+- [x] ローディング状態・エラーハンドリング実装
+- [x] ローカル開発サーバー（worker-local.js）動的ルート追加
+- [x] データベースカラム名統一（DeliveryInstruction → DeliveryInstructions）
+- [x] 編集後のキャッシュ無効化・リアルタイム更新
+- [x] Address + Shipper/Consigneeテーブル両方の更新処理
+- [x] 編集機能の包括的テスト実行・動作確認
+
 ## 現在の状態（2025年8月12日時点）
 
 ### 🚀 本番稼働中
@@ -345,7 +359,9 @@ MigrationTool.exe "MyData.sdf" "new.sqlite"
    - `/api/health` - ヘルスチェック
    - `/api/orders` - 注文管理（GET/POST、ページネーション、フィルタリング）
    - `/api/shippers` - 荷主管理（GET/POST、Address JOIN、検索機能）
+   - `/api/shippers/:id` - 荷主個別操作（GET/PUT、編集機能対応）
    - `/api/consignees` - 送付先管理（GET/POST、Address JOIN、検索機能）
+   - `/api/consignees/:id` - 送付先個別操作（GET/PUT、編集機能対応）
    - `/api/products` - 商品管理（GET/POST、カテゴリフィルタ、アクティブフィルタ）
    - `/api/stores` - 集配所管理（GET/POST、運送業者フィルタ、サービスエリア検索）
    - `/api/postal/search/[zipcode]` - 郵便番号検索（日本郵便API、フォールバック対応）
@@ -354,12 +370,13 @@ MigrationTool.exe "MyData.sdf" "new.sqlite"
 3. **React フロントエンド**: 
    - **注文管理**: D1データベース連携完了（リアルタイムCRUD、高度な注文作成フォーム）
    - **注文作成フォーム**: Shipper/Consignee/Product選択、複数明細対応、荷主履歴連携
-   - **荷主管理**: API連携完了（検索・ページネーション・リアルタイム更新）
-   - **送付先管理**: API連携完了（検索・ページネーション・リアルタイム更新）
+   - **荷主管理**: API連携完了（検索・ページネーション・リアルタイム更新・編集機能）
+   - **送付先管理**: API連携完了（検索・ページネーション・リアルタイム更新・編集機能）
    - **商品管理**: API連携完了（果物商品対応、検索・ページネーション・リアルタイム更新）
    - **集配所管理**: API連携完了（検索・ページネーション・リアルタイム更新）
    - **ふりがな自動生成**: 氏名・会社名入力時の即座変換（wanakana + 辞書システム）
    - **郵便番号検索統合**: AddressFormに完全統合（7桁自動検索・手動検索ボタン・エラーハンドリング・住所自動入力）
+   - **編集機能**: 荷主・送付先の既存データ編集（フォーム自動読み込み・更新・エラーハンドリング）
    - **ダッシュボード**: 統計表示
    - **レスポンシブUI**: 全デバイス対応
 
@@ -382,6 +399,18 @@ curl "https://highlandirectweb.pages.dev/api/orders?page=1&limit=10"
 curl -X POST https://highlandirectweb.pages.dev/api/orders \
   -H "Content-Type: application/json" \
   -d '{"ShipperName":"テスト荷主","ConsigneeName":"テスト送付先"}'
+
+# 荷主個別取得・更新（編集機能）
+curl "https://highlandirectweb.pages.dev/api/shippers/1"  # 個別取得
+curl -X PUT "https://highlandirectweb.pages.dev/api/shippers/1" \
+  -H "Content-Type: application/json" \
+  -d '{"Name":"更新された荷主名","CreditLimit":1500000}'  # 更新
+
+# 送付先個別取得・更新（編集機能）
+curl "https://highlandirectweb.pages.dev/api/consignees/1"  # 個別取得
+curl -X PUT "https://highlandirectweb.pages.dev/api/consignees/1" \
+  -H "Content-Type: application/json" \
+  -d '{"Name":"更新された送付先名","DeliveryInstructions":"新しい配送指示"}'  # 更新
 
 # 郵便番号検索（日本郵便API連携）
 curl "https://highlandirectweb.pages.dev/api/postal/search/1000005"  # 東京都千代田区丸の内
@@ -445,16 +474,21 @@ git push origin main  # 自動デプロイ → CloudFlare Pages
 - `functions/api/orders.ts` - Orders API with D1 database integration
 - `functions/api/health.ts` - Health check endpoint
 - `functions/api/shippers.ts` - Shippers API with Address JOIN
+- `functions/api/shippers/[id].ts` - Individual shipper operations (GET/PUT for editing)
 - `functions/api/consignees.ts` - Consignees API with Address JOIN
+- `functions/api/consignees/[id].ts` - Individual consignee operations (GET/PUT for editing)
 - `functions/api/products.ts` - Products API with filtering
 - `functions/api/stores.ts` - Stores API with carrier filtering
 - `functions/api/postal/search/[zipcode].ts` - Japan Post API integration for postal code lookup
 - `src/pages/Orders/OrderList.tsx` - Orders page with API integration
+- `src/pages/Shippers/ShipperForm.tsx` - Shipper creation/editing form with edit mode support
+- `src/pages/Consignees/ConsigneeForm.tsx` - Consignee creation/editing form with edit mode support
 - `src/components/AddressForm.tsx` - Address form with furigana auto-generation and postal code search integration
 - `src/utils/furigana.ts` - Furigana generation utility (wanakana + dictionary)
 - `src/utils/postalCodeApi.ts` - Postal code search utility with Japan Post API integration
 - `src/api/client.ts` - Frontend API client
 - `src/types/index.ts` - Complete TypeScript definitions
+- `worker-local.js` - Local development server with all API routes including dynamic routing
 - `migration/schema.sql` - D1 database schema
 - `migration/seed.sql` - Initial data
 - `migration/performance_indexes.sql` - Database performance optimization
@@ -462,7 +496,7 @@ git push origin main  # 自動デプロイ → CloudFlare Pages
 ### Production Environment
 - **Live URL**: https://highlandirectweb.pages.dev/
 - **Database**: CloudFlare D1 `highlandirect-db` (remote)
-- **API Endpoints**: `/api/health`, `/api/orders`, `/api/shippers`, `/api/consignees`, `/api/products`, `/api/stores`, `/api/postal/search/[zipcode]`
+- **API Endpoints**: `/api/health`, `/api/orders`, `/api/shippers`, `/api/shippers/:id`, `/api/consignees`, `/api/consignees/:id`, `/api/products`, `/api/stores`, `/api/postal/search/[zipcode]`
 - **Auto-deploy**: GitHub push → CloudFlare Pages
 - Path alias `@/` configured to point to `src/`
 

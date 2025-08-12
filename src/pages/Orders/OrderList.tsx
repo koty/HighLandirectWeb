@@ -9,16 +9,10 @@ import {
   MenuItem,
   Grid,
   Chip,
-  IconButton,
-  Menu,
-  MenuList,
-  ListItemIcon,
-  ListItemText,
   CircularProgress,
 } from '@mui/material'
 import {
   Add as AddIcon,
-  MoreVert as MoreIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
   Print as PrintIcon,
@@ -91,39 +85,13 @@ const OrderList: React.FC = () => {
   // フィルタリング処理（クライアントサイド検索用）
   const filteredOrders = orders.filter((order) => {
     const matchesSearch = searchTerm === '' || 
-      order.OrderNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.ShipperName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.ConsigneeName?.toLowerCase().includes(searchTerm.toLowerCase())
+      order.Shipper?.Address?.Name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      order.Consignee?.Address?.Name?.toLowerCase().includes(searchTerm.toLowerCase())
     
     return matchesSearch
   })
 
-  const getStatusColor = (status: Order['OrderStatus']) => {
-    switch (status) {
-      case 'pending': return 'warning'
-      case 'processing': return 'info'
-      case 'completed': return 'success'
-      case 'cancelled': return 'error'
-      default: return 'default'
-    }
-  }
-
-  const getStatusText = (status: Order['OrderStatus']) => {
-    switch (status) {
-      case 'pending': return '受付'
-      case 'processing': return '処理中'
-      case 'completed': return '完了'
-      case 'cancelled': return 'キャンセル'
-      default: return '不明'
-    }
-  }
-
   const columns: GridColDef[] = [
-    {
-      field: 'OrderNumber',
-      headerName: '注文番号',
-      width: 150,
-    },
     {
       field: 'OrderDate',
       headerName: '注文日',
@@ -134,29 +102,19 @@ const OrderList: React.FC = () => {
       field: 'ShipperName',
       headerName: '荷主',
       width: 200,
+      valueGetter: (params) => params.row.Shipper?.Address?.Name || '',
     },
     {
       field: 'ConsigneeName',
       headerName: '送付先',
       width: 200,
+      valueGetter: (params) => params.row.Consignee?.Address?.Name || '',
     },
     {
       field: 'TotalAmount',
       headerName: '金額',
       width: 100,
       valueFormatter: (params) => `¥${params.value?.toLocaleString() || 0}`,
-    },
-    {
-      field: 'OrderStatus',
-      headerName: 'ステータス',
-      width: 120,
-      renderCell: (params) => (
-        <Chip
-          label={getStatusText(params.value)}
-          color={getStatusColor(params.value)}
-          size="small"
-        />
-      ),
     },
     {
       field: 'TrackingNumber',
@@ -258,7 +216,7 @@ const OrderList: React.FC = () => {
             <DataGrid
               rows={filteredOrders}
               columns={columns}
-              getRowId={(row) => row.OrderID}
+              getRowId={(row) => row.OrderId}
             initialState={{
               pagination: {
                 paginationModel: {

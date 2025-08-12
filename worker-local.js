@@ -51,12 +51,6 @@ router.get('/api/shippers', async (request, env) => {
       a.Fax,
       a.MailAddress,
       a.Memo,
-      s.ShipperCode,
-      s.ShipperType,
-      s.ContractStartDate,
-      s.ContractEndDate,
-      s.CreditLimit,
-      s.PaymentTerms,
       s.IsActive,
       s.CreatedAt,
       s.UpdatedAt
@@ -137,16 +131,12 @@ router.post('/api/shippers', async (request, env) => {
     
     // Create shipper
     const shipperQuery = `
-      INSERT INTO Shipper (AddressId, ShipperCode, ShipperType, CreditLimit, PaymentTerms)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO Shipper (AddressId)
+      VALUES (?)
     `
     
     const shipperResult = await env.DB.prepare(shipperQuery).bind(
-      addressId,
-      data.ShipperCode || null,
-      data.ShipperType || null,
-      data.CreditLimit || null,
-      data.PaymentTerms || null
+      addressId
     ).run()
     
     return new Response(JSON.stringify({
@@ -176,13 +166,12 @@ router.get('/api/orders', async (request, env) => {
   const page = parseInt(url.searchParams.get('page') || '1')
   const limit = parseInt(url.searchParams.get('limit') || '10')
   const search = url.searchParams.get('search')
-  const status = url.searchParams.get('status')
+  // status parameter removed as OrderStatus column was deleted
   const shipperId = url.searchParams.get('shipperId')
   
   let query = `
     SELECT 
       o.OrderId as OrderID,
-      o.OrderNumber,
       o.OrderDate,
       o.ShipperId,
       o.ConsigneeId,
@@ -191,11 +180,7 @@ router.get('/api/orders', async (request, env) => {
       o.Quantity,
       o.UnitPrice,
       o.TotalAmount,
-      o.OrderStatus,
-      o.RequestedDeliveryDate,
-      o.ActualDeliveryDate,
       o.TrackingNumber,
-      o.SpecialInstructions,
       o.CreatedAt,
       o.UpdatedAt,
       sa.Name as ShipperName,
@@ -215,14 +200,9 @@ router.get('/api/orders', async (request, env) => {
   const params = []
   
   if (search) {
-    query += ` AND (o.OrderNumber LIKE ? OR sa.Name LIKE ? OR ca.Name LIKE ?)`
+    query += ` AND (sa.Name LIKE ? OR ca.Name LIKE ?)`
     const searchTerm = `%${search}%`
-    params.push(searchTerm, searchTerm, searchTerm)
-  }
-  
-  if (status && status !== 'all') {
-    query += ` AND o.OrderStatus = ?`
-    params.push(status)
+    params.push(searchTerm, searchTerm)
   }
   
   if (shipperId) {
@@ -253,14 +233,9 @@ router.get('/api/orders', async (request, env) => {
     const countParams = []
     
     if (search) {
-      countQuery += ` AND (o.OrderNumber LIKE ? OR sa.Name LIKE ? OR ca.Name LIKE ?)`
+      countQuery += ` AND (sa.Name LIKE ? OR ca.Name LIKE ?)`
       const searchTerm = `%${search}%`
-      countParams.push(searchTerm, searchTerm, searchTerm)
-    }
-    
-    if (status && status !== 'all') {
-      countQuery += ` AND o.OrderStatus = ?`
-      countParams.push(status)
+      countParams.push(searchTerm, searchTerm)
     }
     
     if (shipperId) {
@@ -298,18 +273,14 @@ router.post('/api/orders', async (request, env) => {
   const data = await request.json()
   
   try {
-    // Generate order number
-    const orderNumber = `ORD-${new Date().getFullYear()}-${Date.now().toString().slice(-6)}`
-    
     const query = `
       INSERT INTO "Order" (
-        OrderNumber, OrderDate, ShipperId, ConsigneeId, ProductId, StoreId,
-        Quantity, UnitPrice, TotalAmount, OrderStatus, RequestedDeliveryDate, SpecialInstructions
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        OrderDate, ShipperId, ConsigneeId, ProductId, StoreId,
+        Quantity, UnitPrice, TotalAmount
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `
     
     const result = await env.DB.prepare(query).bind(
-      orderNumber,
       data.OrderDate || new Date().toISOString().split('T')[0],
       data.ShipperId,
       data.ConsigneeId,
@@ -317,17 +288,13 @@ router.post('/api/orders', async (request, env) => {
       data.StoreId,
       data.Quantity || 1,
       data.UnitPrice || 0,
-      data.TotalAmount || 0,
-      data.OrderStatus || '受付',
-      data.DeliveryDate || null,
-      data.SpecialInstructions || null
+      data.TotalAmount || 0
     ).run()
     
     return new Response(JSON.stringify({
       success: true,
       data: {
         OrderId: result.meta.last_row_id,
-        OrderNumber: orderNumber,
         ...data
       }
     }), {

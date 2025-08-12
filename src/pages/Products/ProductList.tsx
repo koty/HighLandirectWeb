@@ -5,7 +5,7 @@ import { DataGrid, GridColDef } from '@mui/x-data-grid'
 import { useQuery } from 'react-query'
 import axios from 'axios'
 
-import { ProductMaster } from '@/types'
+import { Product } from '@/types'
 
 const ProductList: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('')

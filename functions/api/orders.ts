@@ -1,11 +1,9 @@
 // CloudFlare Pages Function: Orders API with D1 Database
-import { EventContext, Env, CORS_HEADERS, ApiResponse } from '../types';
+import { EventContext, Env, CORS_HEADERS } from '../types';
 
 interface Order {
   OrderID: number;
-  OrderNumber: string;
   OrderDate: string;
-  OrderStatus: string;
   TotalAmount: number;
   Quantity: number;
   ShipperName: string;
@@ -16,17 +14,14 @@ interface Order {
 interface OrderQueryParams {
   page?: number;
   limit?: number;
-  status?: string | null;
 }
 
 // Database query helpers
-async function getOrders(env: Env, { page = 1, limit = 10, status = null }: OrderQueryParams = {}): Promise<{ orders: Order[], total: number }> {
+async function getOrders(env: Env, { page = 1, limit = 10 }: OrderQueryParams = {}): Promise<{ orders: Order[], total: number }> {
   let query = `
     SELECT 
       o.OrderId as OrderID,
-      o.OrderNumber,
       o.OrderDate,
-      o.OrderStatus,
       o.TotalAmount,
       o.Quantity,
       sa.Name as ShipperName,
@@ -42,11 +37,6 @@ async function getOrders(env: Env, { page = 1, limit = 10, status = null }: Orde
   `;
 
   const params = [];
-  
-  if (status) {
-    query += ` AND o.OrderStatus = ?`;
-    params.push(status);
-  }
 
   query += ` ORDER BY o.OrderDate DESC`;
   
@@ -58,17 +48,13 @@ async function getOrders(env: Env, { page = 1, limit = 10, status = null }: Orde
   console.log('SQL Query:', query, 'Params:', params);
   
   const { results } = await env.DB.prepare(query).bind(...params).all();
-  return results;
+  const total = await getOrdersCount(env);
+  return { orders: results || [], total };
 }
 
-async function getOrdersCount(env, { status = null } = {}) {
+async function getOrdersCount(env) {
   let query = `SELECT COUNT(*) as total FROM "Order" WHERE 1 = 1`;
   const params = [];
-  
-  if (status) {
-    query += ` AND OrderStatus = ?`;
-    params.push(status);
-  }
 
   const { results } = await env.DB.prepare(query).bind(...params).all();
   return results[0]?.total || 0;
@@ -85,17 +71,14 @@ interface CreateOrderData {
 }
 
 async function createOrder(env: Env, orderData: CreateOrderData): Promise<Order> {
-  const orderNumber = `ORD-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`;
-  
   const query = `
     INSERT INTO "Order" (
-      OrderNumber, OrderDate, ShipperId, ConsigneeId, ProductId, StoreId,
-      Quantity, UnitPrice, TotalAmount, OrderStatus
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      OrderDate, ShipperId, ConsigneeId, ProductId, StoreId,
+      Quantity, UnitPrice, TotalAmount
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
   const params = [
-    orderNumber,
     new Date().toISOString().split('T')[0],
     orderData.ShipperId || 1,
     orderData.ConsigneeId || 1,
@@ -103,8 +86,7 @@ async function createOrder(env: Env, orderData: CreateOrderData): Promise<Order>
     orderData.StoreId || 1,
     orderData.Quantity || 1,
     orderData.UnitPrice || 1000,
-    orderData.TotalAmount || 1000,
-    '受付'
+    orderData.TotalAmount || 1000
   ];
 
   await env.DB.prepare(query).bind(...params).run();
@@ -113,9 +95,7 @@ async function createOrder(env: Env, orderData: CreateOrderData): Promise<Order>
   const selectQuery = `
     SELECT 
       o.OrderId as OrderID,
-      o.OrderNumber,
       o.OrderDate,
-      o.OrderStatus,
       o.TotalAmount,
       o.Quantity,
       sa.Name as ShipperName,
@@ -127,11 +107,11 @@ async function createOrder(env: Env, orderData: CreateOrderData): Promise<Order>
     LEFT JOIN Consignee c ON o.ConsigneeId = c.ConsigneeId
     LEFT JOIN Address ca ON c.AddressId = ca.AddressId
     LEFT JOIN ProductMaster pm ON o.ProductId = pm.ProductId
-    WHERE o.OrderNumber = ?
+    WHERE o.OrderId = (SELECT last_insert_rowid())
   `;
 
-  const { results } = await env.DB.prepare(selectQuery).bind(orderNumber).all();
-  return results[0];
+  const { results } = await env.DB.prepare(selectQuery).all();
+  return results?.[0] || null;
 }
 
 export async function onRequest(context: EventContext<Env>): Promise<Response> {
@@ -164,29 +144,23 @@ export async function onRequest(context: EventContext<Env>): Promise<Response> {
       console.log('Fetching orders from D1:', { page, limit, status });
 
       // Get orders from database
-      const orders = await getOrders(env, { 
+      const result = await getOrders(env, { 
         page, 
-        limit, 
-        status: (status && status !== 'all') ? status : null 
-      });
-
-      // Get total count for pagination
-      const total = await getOrdersCount(env, { 
-        status: (status && status !== 'all') ? status : null 
+        limit
       });
 
       const response = {
         success: true,
-        data: orders,
+        data: result.orders,
         pagination: {
           page,
           limit,
-          total,
-          totalPages: Math.ceil(total / limit)
+          total: result.total,
+          totalPages: Math.ceil(result.total / limit)
         }
       };
 
-      console.log('D1 Response:', { orderCount: orders.length, total });
+      console.log('D1 Response:', { orderCount: result.orders.length, total: result.total });
 
       return new Response(JSON.stringify(response), { 
         headers: CORS_HEADERS 

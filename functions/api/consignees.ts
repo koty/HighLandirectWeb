@@ -46,11 +46,6 @@ export async function onRequestGet(context) {
         a.Fax,
         a.MailAddress,
         a.Memo,
-        c.ConsigneeCode,
-        c.DeliveryInstructions,
-        c.AccessInfo,
-        c.PreferredDeliveryTime,
-        c.SpecialHandling,
         c.IsActive,
         c.CreatedAt,
         c.UpdatedAt
@@ -173,17 +168,12 @@ export async function onRequestPost(context) {
 
     // Create consignee record
     const consigneeQuery = `
-      INSERT INTO Consignee (AddressId, ConsigneeCode, DeliveryInstructions, AccessInfo, PreferredDeliveryTime, SpecialHandling) 
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO Consignee (AddressId) 
+      VALUES (?)
     `;
 
     const consigneeResult = await env.DB.prepare(consigneeQuery).bind(
-      addressId,
-      data.ConsigneeCode || null,
-      data.DeliveryInstructions || null,
-      data.AccessInfo || null,
-      data.PreferredDeliveryTime || null,
-      data.SpecialHandling || null
+      addressId
     ).run();
 
     if (!consigneeResult.success) {

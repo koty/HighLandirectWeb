@@ -15,9 +15,6 @@ interface Consignee {
   Fax?: string;
   MailAddress?: string;
   Memo?: string;
-  ConsigneeCode?: string;
-  DeliveryInstruction?: string;
-  PreferredDeliveryTime?: string;
   IsActive: number;
   CreatedAt: string;
   UpdatedAt: string;
@@ -67,9 +64,6 @@ export async function onRequestGet(context: EventContext<Env>): Promise<Response
         a.Fax,
         a.MailAddress,
         a.Memo,
-        c.ConsigneeCode,
-        c.DeliveryInstructions,
-        c.PreferredDeliveryTime,
         c.IsActive,
         c.CreatedAt,
         c.UpdatedAt
@@ -223,17 +217,11 @@ export async function onRequestPut(context: EventContext<Env>): Promise<Response
     // Update consignee information
     const updateConsigneeQuery = `
       UPDATE Consignee SET
-        ConsigneeCode = ?,
-        DeliveryInstructions = ?,
-        PreferredDeliveryTime = ?,
         UpdatedAt = CURRENT_TIMESTAMP
       WHERE ConsigneeId = ?
     `;
 
     const consigneeResult = await env.DB.prepare(updateConsigneeQuery).bind(
-      data.ConsigneeCode || null,
-      data.DeliveryInstructions || null,
-      data.PreferredDeliveryTime || null,
       consigneeId
     ).run();
 
@@ -260,9 +248,6 @@ export async function onRequestPut(context: EventContext<Env>): Promise<Response
         a.Fax,
         a.MailAddress,
         a.Memo,
-        c.ConsigneeCode,
-        c.DeliveryInstructions,
-        c.PreferredDeliveryTime,
         c.IsActive,
         c.CreatedAt,
         c.UpdatedAt

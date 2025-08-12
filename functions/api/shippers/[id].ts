@@ -15,12 +15,6 @@ interface Shipper {
   Fax?: string;
   MailAddress?: string;
   Memo?: string;
-  ShipperCode?: string;
-  ShipperType?: string;
-  ContractStartDate?: string;
-  ContractEndDate?: string;
-  CreditLimit?: number;
-  PaymentTerms?: string;
   IsActive: number;
   CreatedAt: string;
   UpdatedAt: string;
@@ -70,12 +64,6 @@ export async function onRequestGet(context: EventContext<Env>): Promise<Response
         a.Fax,
         a.MailAddress,
         a.Memo,
-        s.ShipperCode,
-        s.ShipperType,
-        s.ContractStartDate,
-        s.ContractEndDate,
-        s.CreditLimit,
-        s.PaymentTerms,
         s.IsActive,
         s.CreatedAt,
         s.UpdatedAt
@@ -229,21 +217,11 @@ export async function onRequestPut(context: EventContext<Env>): Promise<Response
     // Update shipper information
     const updateShipperQuery = `
       UPDATE Shipper SET
-        ShipperCode = ?,
-        ShipperType = ?,
-        ContractStartDate = ?,
-        CreditLimit = ?,
-        PaymentTerms = ?,
         UpdatedAt = CURRENT_TIMESTAMP
       WHERE ShipperId = ?
     `;
 
     const shipperResult = await env.DB.prepare(updateShipperQuery).bind(
-      data.ShipperCode || null,
-      data.ShipperType || null,
-      data.ContractStartDate || null,
-      data.CreditLimit || null,
-      data.PaymentTerms || null,
       shipperId
     ).run();
 
@@ -270,12 +248,6 @@ export async function onRequestPut(context: EventContext<Env>): Promise<Response
         a.Fax,
         a.MailAddress,
         a.Memo,
-        s.ShipperCode,
-        s.ShipperType,
-        s.ContractStartDate,
-        s.ContractEndDate,
-        s.CreditLimit,
-        s.PaymentTerms,
         s.IsActive,
         s.CreatedAt,
         s.UpdatedAt

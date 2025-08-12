@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery } from 'react-query'
 import axios from 'axios'
 
-import { Shipper } from '@/types'
+// Shipper type is no longer needed as individual import
 
 const ShipperList: React.FC = () => {
   const navigate = useNavigate()

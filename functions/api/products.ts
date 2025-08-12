@@ -30,14 +30,9 @@ export async function onRequestGet(context) {
     }
 
     if (search) {
-      whereConditions.push('(ProductName LIKE ? OR ProductCode LIKE ?)');
+      whereConditions.push('ProductName LIKE ?');
       const searchTerm = `%${search}%`;
-      searchParams.push(searchTerm, searchTerm);
-    }
-
-    if (category) {
-      whereConditions.push('ProductCategory = ?');
-      searchParams.push(category);
+      searchParams.push(searchTerm);
     }
 
     const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
@@ -46,14 +41,8 @@ export async function onRequestGet(context) {
     const query = `
       SELECT 
         ProductId,
-        ProductCode,
         ProductName,
-        ProductCategory,
         UnitPrice,
-        TaxRate,
-        Weight,
-        Dimensions,
-        IsFragile,
         IsDefault,
         IsActive,
         CreatedAt,
@@ -83,16 +72,8 @@ export async function onRequestGet(context) {
     const countResult = await env.DB.prepare(countQuery).bind(...searchParams).first();
     const total = countResult?.total || 0;
 
-    // Get product categories for filtering
-    const categoriesQuery = `
-      SELECT DISTINCT ProductCategory
-      FROM ProductMaster
-      WHERE IsActive = 1 AND ProductCategory IS NOT NULL
-      ORDER BY ProductCategory ASC
-    `;
-    
-    const categoriesResult = await env.DB.prepare(categoriesQuery).all();
-    const categories = categoriesResult.results?.map(row => row.ProductCategory) || [];
+    // No categories since ProductCategory column was removed
+    const categories = [];
 
     console.log('Products query result:', result.results?.length, 'rows, total:', total);
 
@@ -159,20 +140,13 @@ export async function onRequestPost(context) {
     // Create product record
     const query = `
       INSERT INTO ProductMaster (
-        ProductCode, ProductName, ProductCategory, UnitPrice, TaxRate,
-        Weight, Dimensions, IsFragile, IsDefault, IsActive
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ProductName, UnitPrice, IsDefault, IsActive
+      ) VALUES (?, ?, ?, ?)
     `;
 
     const result = await env.DB.prepare(query).bind(
-      data.ProductCode || null,
       data.ProductName,
-      data.ProductCategory || null,
       data.UnitPrice,
-      data.TaxRate || 0.1,
-      data.Weight || null,
-      data.Dimensions || null,
-      data.IsFragile ? 1 : 0,
       data.IsDefault ? 1 : 0,
       data.IsActive !== undefined ? (data.IsActive ? 1 : 0) : 1
     ).run();
