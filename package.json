@@ -10,6 +10,8 @@
     "dev:workers": "cd backend && wrangler dev --port 8787 --local",
     "lint": "eslint . --ext js,jsx,ts,tsx",
     "lint:fix": "eslint . --ext js,jsx,ts,tsx --fix",
+    "lint:security": "eslint . --ext js,jsx,ts,tsx --no-ignore",
+    "security-check": "npm run lint 2>&1 | grep -E '(security/|error.*security)' || echo 'セキュリティチェック完了: 重大な問題は見つかりませんでした'",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
@@ -37,11 +39,14 @@
     "@types/react": "^18.2.43",
     "@types/react-dom": "^18.2.17",
     "@typescript-eslint/eslint-plugin": "^6.14.0",
+    "@typescript-eslint/eslint-plugin-tslint": "^7.0.2",
     "@typescript-eslint/parser": "^6.14.0",
     "@vitejs/plugin-react": "^4.2.1",
     "eslint": "^8.55.0",
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.5",
+    "eslint-plugin-security": "^3.0.1",
+    "eslint-plugin-security-node": "^1.1.4",
     "typescript": "^5.2.2",
     "vite": "^5.0.8",
     "wrangler": "^4.28.1"

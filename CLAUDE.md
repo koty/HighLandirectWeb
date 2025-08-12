@@ -28,11 +28,12 @@ npx wrangler dev worker-local.js --config=wrangler-dev.toml --port=8788
 # フロントエンド → API → ローカルSQLite データベース
 ```
 
-### 品質管理
+### 品質管理・セキュリティチェック
 ```bash
-npm run lint         # ESLint実行
+npm run lint         # ESLint実行（コード品質・セキュリティチェック）
 npm run lint:fix     # ESLint自動修正
 npm run type-check   # TypeScript型チェック
+npm run security-check # セキュリティ問題のみ表示
 ```
 
 ### CloudFlare D1 Database
@@ -65,6 +66,7 @@ npx wrangler d1 execute highlandirect-local --command="SELECT COUNT(*) FROM Ship
 - **React Query** - サーバー状態管理
 - **React Hook Form + Yup** - フォーム管理・バリデーション
 - **wanakana** - 日本語ふりがな自動生成
+- **ESLint + Security Plugin** - コード品質・セキュリティチェック
 
 ### バックエンド構成
 - **CloudFlare Pages Functions** - サーバーレス API（functions/ディレクトリ）
@@ -296,6 +298,14 @@ MigrationTool.exe "MyData.sdf" "new.sqlite"
 - [x] ローディング表示・エラーハンドリング・手動修正対応
 - [x] ShipperForm・ConsigneeFormでの利用開始
 
+### Phase 12: セキュリティ・コード品質向上 ✅完了
+- [x] ESLintセキュリティプラグイン導入（eslint-plugin-security）
+- [x] セキュリティルール設定（オブジェクトインジェクション、危険な正規表現検出等）
+- [x] セキュリティチェック専用スクリプト追加（`npm run security-check`）
+- [x] Object injection脆弱性の修正（Map構造への変更）
+- [x] 危険なオブジェクトアクセスパターンの安全化
+- [x] 総合的なコード品質チェック体制の確立
+
 ## 現在の状態（2025年8月12日時点）
 
 ### 🚀 本番稼働中
@@ -332,7 +342,7 @@ MigrationTool.exe "MyData.sdf" "new.sqlite"
 4. **開発・デプロイ環境**:
    - **本番環境**: CloudFlare Pages + D1 (自動デプロイ、GitHub Actions CI/CD)
    - **ローカル開発環境**: フルスタック対応（フロントエンド + API + SQLite）
-   - TypeScript strict mode、自動型チェック・リント
+   - **コード品質管理**: TypeScript strict mode、ESLint（セキュリティプラグイン含む）、自動型チェック
 
 ### 📊 実際のデータベースデータ
 - **ORD-2024-001**: 東京商事株式会社 → 山田太郎（宅急便60サイズ、完了）

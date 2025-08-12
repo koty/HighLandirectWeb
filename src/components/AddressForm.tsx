@@ -50,10 +50,15 @@ const AddressForm: React.FC<AddressFormProps> = ({
   const getFieldName = (field: string) => namePrefix ? `${namePrefix}.${field}` : field
   const getFieldError = (field: string) => {
     const fieldName = getFieldName(field)
-    const error = fieldName.includes('.') 
-      ? fieldName.split('.').reduce((obj: any, key: string) => obj?.[key], errors)
-      : errors[field]
-    return error
+    if (fieldName.includes('.')) {
+      return fieldName.split('.').reduce((obj: any, key: string) => {
+        if (!obj || typeof obj !== 'object') return undefined
+        return Object.prototype.hasOwnProperty.call(obj, key) ? (obj as any)[key] : undefined
+      }, errors)
+    }
+    return errors && typeof errors === 'object' && Object.prototype.hasOwnProperty.call(errors, field) 
+      ? (errors as any)[field] 
+      : undefined
   }
 
   const getErrorMessage = (field: string) => {
