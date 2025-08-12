@@ -23,12 +23,15 @@ npm run lint:fix     # ESLint自動修正
 npm run type-check   # TypeScript型チェック
 ```
 
-### CloudFlare Workers
+### CloudFlare D1 Database
 ```bash
+# D1データベース管理
+npx wrangler d1 execute highlandirect-db --file=migration/schema.sql --remote  # スキーマ適用
+npx wrangler d1 execute highlandirect-db --file=migration/seed.sql --remote    # 初期データ投入
+npx wrangler d1 execute highlandirect-db --command="SELECT COUNT(*) FROM 'Order'" --remote  # データ確認
+
+# ローカル開発用Workers（オプション）
 npm run dev:workers  # Workers開発環境 (port 8787)
-# または
-npx wrangler dev --port 8787
-wrangler d1 execute highlandirect-db --file=migration/schema.sql  # D1スキーマ適用
 ```
 
 ## Architecture Overview
@@ -41,36 +44,35 @@ wrangler d1 execute highlandirect-db --file=migration/schema.sql  # D1スキー�
 - **React Hook Form + Yup** - フォーム管理・バリデーション
 
 ### バックエンド構成
-- **CloudFlare Workers** - サーバーレス API
-- **CloudFlare D1** - SQLite データベース
-- **itty-router** - API ルーティング
+- **CloudFlare Pages Functions** - サーバーレス API（functions/ディレクトリ）
+- **CloudFlare D1** - SQLite データベース（リモート運用中）
+- **D1 Database**: `highlandirect-db` (ID: 4c827b08-7b7c-484e-9d3b-6e6a153842bb)
 
 ### ディレクトリ構造
 ```
-src/
-├── api/client.ts      # API クライアント設定
-├── components/Layout/ # 共通レイアウト
-├── data/mockData.ts  # 開発用モックデータ
-├── pages/            # ページコンポーネント
-│   ├── Dashboard.tsx # ダッシュボード
-│   ├── Orders/       # 注文管理
-│   ├── Shippers/     # 荷主管理
-│   ├── Consignees/   # 送付先管理
-│   ├── Products/     # 商品管理
-│   └── Stores/       # 集配所管理
-├── types/index.ts    # TypeScript型定義
-├── theme.ts          # MUIテーマ設定
-├── middleware/       # Workers ミドルウェア
-├── routes/          # API エンドポイント
-│   ├── orders.ts    # 注文管理API
-│   ├── shippers.ts  # 荷主管理API
-│   ├── consignees.ts # 送付先管理API
-│   ├── products.ts  # 商品管理API
-│   ├── stores.ts    # 集配所管理API
-│   └── postal.ts    # 郵便番号検索API
-├── utils/postalCodeApi.ts # 郵便番号API クライアント
-├── components/AddressForm.tsx # 住所入力フォーム（郵便番号自動補完付き）
-└── worker.ts        # Workers エントリーポイント
+├── src/                    # フロントエンド
+│   ├── api/client.ts       # API クライアント設定
+│   ├── components/Layout/  # 共通レイアウト
+│   ├── data/mockData.ts    # 開発用モックデータ
+│   ├── pages/              # ページコンポーネント
+│   │   ├── Dashboard.tsx   # ダッシュボード
+│   │   ├── Orders/         # 注文管理（API連携済み）
+│   │   ├── Shippers/       # 荷主管理
+│   │   ├── Consignees/     # 送付先管理
+│   │   ├── Products/       # 商品管理
+│   │   └── Stores/         # 集配所管理
+│   ├── types/index.ts      # TypeScript型定義
+│   └── theme.ts            # MUIテーマ設定
+├── functions/              # CloudFlare Pages Functions (バックエンドAPI)
+│   └── api/
+│       ├── health.js       # ヘルスチェック
+│       └── orders.js       # 注文管理API（D1連携済み）
+├── migration/              # データベース関連
+│   ├── schema.sql          # D1データベーススキーマ
+│   ├── seed.sql            # 初期データ
+│   └── README.md           # 移行手順
+├── backend/                # Workers開発用設定（オプション）
+└── wrangler.toml           # CloudFlare D1設定
 ```
 
 ## Database Design
@@ -98,24 +100,25 @@ Order (注文)
 ## Important Implementation Notes
 
 ### API設計パターン
-- REST API with CloudFlare Workers
-- CORS対応済み (`src/middleware/cors.ts`)
-- エラーハンドリング統一 (`src/middleware/errorHandler.ts`)
-- ページネーション対応（orders, shippers, consignees）
+- **CloudFlare Pages Functions** で REST API実装
+- CORS対応済み（全APIエンドポイント）
+- エラーハンドリング統一
+- ページネーション・フィルタリング対応
 - API Base URL: `/api/` prefix for all endpoints
 
 ### React コンポーネント設計
 - TypeScript strict mode with path aliases (`@/` points to `src/`)
 - MUI コンポーネント統一 (Material-UI v5)
 - React Hook Form + Yup バリデーション
-- カスタムフック活用
-- 現在はモックデータで動作 (`src/data/mockData.ts`)
+- **注文管理**: API連携完了（リアルタイムCRUD）
+- **その他ページ**: モックデータで動作中
 
-### データフェッチング
-- React Query for server state management
-- API client in `src/api/client.ts` 
-- 型安全なAPI呼び出し (全エンティティの型定義済み)
-- CloudFlare D1 binding: `DB` (環境: `Env` interface in `worker.ts`)
+### データベース連携
+- **CloudFlare D1**: `highlandirect-db` リモート運用中
+- **実装済みAPI**: `/api/orders` (GET/POST)、`/api/health`
+- **JOINクエリ**: Address ← Shipper/Consignee ← Order
+- **初期データ**: 3件の注文、関連する荷主・送付先・商品・集配所
+- D1 binding設定: 変数名 `DB`
 
 ## Future Features
 
@@ -203,72 +206,121 @@ MigrationTool.exe "MyData.sdf" "new.sqlite"
 - [x] トークン管理・キャッシュ機能実装
 - [x] Viteプロキシ設定でフロントエンド-Workers連携
 
-## 現在の状態
+## 現在の状態（2025年8月12日時点）
 
-### ✅ 完全動作する機能
-1. **ローカル開発環境**: `npm run dev` で即座起動可能
-2. **フル機能ダッシュボード**: リアルデータでの統計表示
-3. **完全な注文管理**: 検索・フィルタ・作成フォーム
-4. **マスタデータ管理**: 全エンティティの一覧表示
-5. **レスポンシブUI**: デスクトップ・タブレット・モバイル対応
-6. **型安全な開発**: TypeScript strict mode
-7. **住所入力フォーム**: 郵便番号7桁入力で住所自動補完
-8. **荷主・送付先作成**: バリデーション付きフォーム完備
+### 🚀 本番稼働中
+- **Live URL**: https://highlandirectweb.pages.dev/
+- **GitHub Pages**: https://koty.github.io/HighLandirectWeb/
+- **自動デプロイ**: GitHubプッシュで自動更新
 
-### 📊 テストデータ詳細
-- **東京商事株式会社** → **山田太郎**: 宅急便60サイズ（完了）
-- **大阪工業株式会社** → **大阪工業株式会社**: クール宅急便（受付）
-- **名古屋商会** → **山田太郎**: 宅急便100サイズ（完了）
-- 各種ステータス・配送業者・料金体系をカバー
+### ✅ 完全実装済み機能
+1. **CloudFlare D1データベース**: 本番運用中
+   - データベース: `highlandirect-db` 
+   - スキーマ: 8テーブル（Address, Shipper, Consignee, ProductMaster, Store, Order, OrderHistory, ReportMemo）
+   - 初期データ: 3件の注文 + 関連データ
+
+2. **フルスタックAPI**: CloudFlare Pages Functions
+   - `/api/health` - ヘルスチェック
+   - `/api/orders` - 注文管理（GET/POST、ページネーション、フィルタリング）
+   - CORS対応、エラーハンドリング完備
+
+3. **React フロントエンド**: 
+   - **注文管理**: D1データベース連携完了（リアルタイムCRUD）
+   - **ダッシュボード**: 統計表示
+   - **マスタ管理**: 荷主・送付先・商品・集配所（モックデータ）
+   - **レスポンシブUI**: 全デバイス対応
+
+4. **開発・デプロイ環境**:
+   - TypeScript strict mode
+   - 自動型チェック・リント
+   - GitHub Actions CI/CD
+   - CloudFlare Pages自動デプロイ
+
+### 📊 実際のデータベースデータ
+- **ORD-2024-001**: 東京商事株式会社 → 山田太郎（宅急便60サイズ、完了）
+- **ORD-2024-002**: 大阪工業株式会社 → 大阪工業株式会社（クール宅急便、受付）
+- **ORD-2024-003**: 名古屋商会 → 山田太郎（宅急便100サイズ、完了）
+
+### 🔄 API動作確認
+```bash
+# 注文一覧取得（実際のD1データ）
+curl "https://highlandirectweb.pages.dev/api/orders?page=1&limit=10"
+
+# 新規注文作成（D1データベースに永続化）
+curl -X POST https://highlandirectweb.pages.dev/api/orders \
+  -H "Content-Type: application/json" \
+  -d '{"ShipperName":"テスト荷主","ConsigneeName":"テスト送付先"}'
+```
 
 ### 🔜 次期実装予定
-1. **CloudFlare D1連携**: 実際のデータベース接続
-2. **日本郵便API本番連携**: 正式な認証情報での実装
-3. **ヤマトB2 API連携**: 印刷機能の実装
+1. **他エンティティのAPI連携**: Shippers, Consignees, Products, Stores
+2. **日本郵便API**: 郵便番号検索の本格実装
+3. **ヤマトB2 API**: 印刷機能
 4. **ユーザー認証**: 権限管理システム
-5. **リアルタイム機能**: 配送状況追跡
+5. **リアルタイム通知**: WebSocket/Server-Sent Events
 
-## 技術的成果
-- **フロントエンド**: React 18 + TypeScript + MUI の完全活用
-- **バックエンド**: CloudFlare Workers + D1 のサーバーレス設計
-- **データ設計**: 既存システムからの適切な正規化・役割分離
-- **開発効率**: TypeScript型安全性 + モックデータでの高速開発
+## 🏆 技術的達成
+- **完全なフルスタックWebアプリケーション**
+- **サーバーレス構成**: CloudFlare Pages + D1 + Functions
+- **スケーラブル設計**: エッジコンピューティング + グローバルCDN
+- **型安全**: TypeScript + 厳密なAPI型定義
+- **高速開発**: リアルタイムホットリロード + 自動デプロイ
 
 ## コマンド実行方法
+
+### フロントエンド開発
 ```bash
-# ローカル確認
 npm install
-npm run dev  # → http://localhost:3000
+npm run dev          # ローカル開発サーバー → http://localhost:3000
+npm run build        # 本番ビルド
+npm run type-check   # TypeScript型チェック
+npm run lint         # ESLint実行
+```
 
-# 型チェック・リント
-npm run type-check
-npm run lint
+### データベース管理
+```bash
+# D1データベース作成（初回のみ）
+npx wrangler d1 create highlandirect-db
 
-# 将来のデプロイ
-npm run build
-npm run deploy
+# スキーマ・データ投入（リモート）
+npx wrangler d1 execute highlandirect-db --file=migration/schema.sql --remote
+npx wrangler d1 execute highlandirect-db --file=migration/seed.sql --remote
+
+# データ確認
+npx wrangler d1 execute highlandirect-db --command="SELECT COUNT(*) FROM 'Order'" --remote
+```
+
+### デプロイ
+```bash
+git add .
+git commit -m "Update message"
+git push origin main  # 自動デプロイ → CloudFlare Pages
 ```
 
 ## Key Files for Development
 
 ### Configuration Files
-- `wrangler.toml` - CloudFlare Workers/D1 configuration  
+- `wrangler.toml` - CloudFlare D1 database configuration
 - `vite.config.ts` - Frontend build configuration with path aliases
 - `tsconfig.json` - TypeScript configuration (strict mode)
 - `package.json` - Dependencies and scripts
+- `.github/workflows/deploy.yml` - GitHub Actions CI/CD
 
 ### Core Architecture Files
-- `src/worker.ts` - CloudFlare Workers entry point with router setup
-- `src/types/index.ts` - Complete TypeScript definitions for all entities
-- `src/theme.ts` - MUI theme configuration
-- `src/data/mockData.ts` - Rich mock data for development
+- `functions/api/orders.js` - Orders API with D1 database integration
+- `functions/api/health.js` - Health check endpoint
+- `src/pages/Orders/OrderList.tsx` - Orders page with API integration
+- `src/api/client.ts` - Frontend API client
+- `src/types/index.ts` - Complete TypeScript definitions
+- `migration/schema.sql` - D1 database schema
+- `migration/seed.sql` - Initial data
 
-### Environment Setup
-- Development: React runs on port 3000, Workers on port 8787
+### Production Environment
+- **Live URL**: https://highlandirectweb.pages.dev/
+- **Database**: CloudFlare D1 `highlandirect-db` (remote)
+- **API Endpoints**: `/api/health`, `/api/orders`
+- **Auto-deploy**: GitHub push → CloudFlare Pages
 - Path alias `@/` configured to point to `src/`
-- Mock data includes 5 addresses, 3 shippers, 3 consignees, 4 products, 3 stores, 5 orders
-- Frontend-Workers integration via Vite proxy (`/api` routes to `http://localhost:8787`)
-- Copy `.env.local.example` to `.env.local` for environment variables (Japan Post API credentials)
 
 ## Testing
 
