@@ -1,4 +1,4 @@
-// CloudFlare Pages Function: Orders API
+// CloudFlare Pages Function: Orders API with D1 Database
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -7,50 +7,129 @@ const CORS_HEADERS = {
   'Content-Type': 'application/json'
 };
 
-// Mock data (same as frontend)
-const mockOrders = [
-  {
-    OrderID: 1,
-    OrderNumber: "ORD-2024-001",
-    OrderDate: "2024-01-15",
-    ShipperName: "東京商事株式会社",
-    ConsigneeName: "山田太郎",
-    OrderStatus: "完了",
-    TotalAmount: 12500,
-    ProductName: "宅急便60サイズ",
-    Quantity: 1
-  },
-  {
-    OrderID: 2,
-    OrderNumber: "ORD-2024-002", 
-    OrderDate: "2024-01-16",
-    ShipperName: "大阪工業株式会社",
-    ConsigneeName: "大阪工業株式会社",
-    OrderStatus: "受付",
-    TotalAmount: 15800,
-    ProductName: "クール宅急便",
-    Quantity: 2
-  },
-  {
-    OrderID: 3,
-    OrderNumber: "ORD-2024-003",
-    OrderDate: "2024-01-17", 
-    ShipperName: "名古屋商会",
-    ConsigneeName: "山田太郎",
-    OrderStatus: "完了",
-    TotalAmount: 18200,
-    ProductName: "宅急便100サイズ", 
-    Quantity: 1
+// Database query helpers
+async function getOrders(env, { page = 1, limit = 10, status = null } = {}) {
+  let query = `
+    SELECT 
+      o.OrderId as OrderID,
+      o.OrderNumber,
+      o.OrderDate,
+      o.OrderStatus,
+      o.TotalAmount,
+      o.Quantity,
+      sa.Name as ShipperName,
+      ca.Name as ConsigneeName,
+      pm.ProductName
+    FROM "Order" o
+    LEFT JOIN Shipper s ON o.ShipperId = s.ShipperId
+    LEFT JOIN Address sa ON s.AddressId = sa.AddressId
+    LEFT JOIN Consignee c ON o.ConsigneeId = c.ConsigneeId
+    LEFT JOIN Address ca ON c.AddressId = ca.AddressId
+    LEFT JOIN ProductMaster pm ON o.ProductId = pm.ProductId
+    WHERE o.IsActive = 1
+  `;
+
+  const params = [];
+  
+  if (status) {
+    query += ` AND o.OrderStatus = ?`;
+    params.push(status);
   }
-];
+
+  query += ` ORDER BY o.OrderDate DESC`;
+  
+  // Add pagination
+  const offset = (page - 1) * limit;
+  query += ` LIMIT ? OFFSET ?`;
+  params.push(limit, offset);
+
+  console.log('SQL Query:', query, 'Params:', params);
+  
+  const { results } = await env.DB.prepare(query).bind(...params).all();
+  return results;
+}
+
+async function getOrdersCount(env, { status = null } = {}) {
+  let query = `SELECT COUNT(*) as total FROM "Order" WHERE IsActive = 1`;
+  const params = [];
+  
+  if (status) {
+    query += ` AND OrderStatus = ?`;
+    params.push(status);
+  }
+
+  const { results } = await env.DB.prepare(query).bind(...params).all();
+  return results[0]?.total || 0;
+}
+
+async function createOrder(env, orderData) {
+  const orderNumber = `ORD-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`;
+  
+  const query = `
+    INSERT INTO "Order" (
+      OrderNumber, OrderDate, ShipperId, ConsigneeId, ProductId, StoreId,
+      Quantity, UnitPrice, TotalAmount, OrderStatus
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `;
+
+  const params = [
+    orderNumber,
+    new Date().toISOString().split('T')[0],
+    orderData.ShipperId || 1,
+    orderData.ConsigneeId || 1,
+    orderData.ProductId || 1,
+    orderData.StoreId || 1,
+    orderData.Quantity || 1,
+    orderData.UnitPrice || 1000,
+    orderData.TotalAmount || 1000,
+    '受付'
+  ];
+
+  await env.DB.prepare(query).bind(...params).run();
+  
+  // Return the created order
+  const selectQuery = `
+    SELECT 
+      o.OrderId as OrderID,
+      o.OrderNumber,
+      o.OrderDate,
+      o.OrderStatus,
+      o.TotalAmount,
+      o.Quantity,
+      sa.Name as ShipperName,
+      ca.Name as ConsigneeName,
+      pm.ProductName
+    FROM "Order" o
+    LEFT JOIN Shipper s ON o.ShipperId = s.ShipperId
+    LEFT JOIN Address sa ON s.AddressId = sa.AddressId
+    LEFT JOIN Consignee c ON o.ConsigneeId = c.ConsigneeId
+    LEFT JOIN Address ca ON c.AddressId = ca.AddressId
+    LEFT JOIN ProductMaster pm ON o.ProductId = pm.ProductId
+    WHERE o.OrderNumber = ?
+  `;
+
+  const { results } = await env.DB.prepare(selectQuery).bind(orderNumber).all();
+  return results[0];
+}
 
 export async function onRequest(context) {
-  const { request } = context;
+  const { request, env } = context;
   const url = new URL(request.url);
   
   // Handle CORS preflight
   if (request.method === 'OPTIONS') {
     return new Response(null, { headers: CORS_HEADERS });
+  }
+
+  // Check if database is available
+  if (!env.DB) {
+    console.error('Database not available, falling back to mock data');
+    return new Response(JSON.stringify({
+      error: 'Database not configured'
+    }), {
+      status: 500,
+      headers: CORS_HEADERS
+    });
   }
 
   try {
@@ -60,28 +139,32 @@ export async function onRequest(context) {
       const limit = parseInt(url.searchParams.get('limit') || '10');
       const status = url.searchParams.get('status');
 
-      let filteredOrders = mockOrders;
-      
-      // Filter by status
-      if (status && status !== 'all') {
-        filteredOrders = mockOrders.filter(order => order.OrderStatus === status);
-      }
+      console.log('Fetching orders from D1:', { page, limit, status });
 
-      // Pagination
-      const startIndex = (page - 1) * limit;
-      const endIndex = startIndex + limit;
-      const paginatedOrders = filteredOrders.slice(startIndex, endIndex);
+      // Get orders from database
+      const orders = await getOrders(env, { 
+        page, 
+        limit, 
+        status: (status && status !== 'all') ? status : null 
+      });
+
+      // Get total count for pagination
+      const total = await getOrdersCount(env, { 
+        status: (status && status !== 'all') ? status : null 
+      });
 
       const response = {
         success: true,
-        data: paginatedOrders,
+        data: orders,
         pagination: {
           page,
           limit,
-          total: filteredOrders.length,
-          totalPages: Math.ceil(filteredOrders.length / limit)
+          total,
+          totalPages: Math.ceil(total / limit)
         }
       };
+
+      console.log('D1 Response:', { orderCount: orders.length, total });
 
       return new Response(JSON.stringify(response), { 
         headers: CORS_HEADERS 
@@ -91,19 +174,17 @@ export async function onRequest(context) {
     if (request.method === 'POST') {
       const body = await request.json();
       
-      // Create new order (mock)
-      const newOrder = {
-        OrderID: mockOrders.length + 1,
-        OrderNumber: `ORD-2024-${String(mockOrders.length + 1).padStart(3, '0')}`,
-        OrderDate: new Date().toISOString().split('T')[0],
-        ...body,
-        OrderStatus: "受付"
-      };
+      console.log('Creating new order:', body);
+
+      // Create new order in database
+      const newOrder = await createOrder(env, body);
 
       const response = {
         success: true,
         data: newOrder
       };
+
+      console.log('Created order:', newOrder);
 
       return new Response(JSON.stringify(response), { 
         headers: CORS_HEADERS 

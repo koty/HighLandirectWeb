@@ -1,0 +1,13 @@
+name = "highlandirect-pages"
+compatibility_date = "2025-08-12"
+
+# D1 Database binding for CloudFlare Pages
+[[d1_databases]]
+binding = "DB"
+database_name = "highlander-db"
+# database_id will be filled after creating the database
+database_id = "PLACEHOLDER"
+
+# CloudFlare Pages Functions configuration
+# This file is used for D1 database configuration only
+# Pages Functions will automatically detect functions/ directory
