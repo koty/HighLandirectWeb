@@ -323,7 +323,6 @@ MigrationTool.exe "MyData.sdf" "new.sqlite"
 
 ### 🚀 本番稼働中
 - **Live URL**: https://highlandirectweb.pages.dev/
-- **GitHub Pages**: https://koty.github.io/HighLandirectWeb/
 - **自動デプロイ**: GitHubプッシュで自動更新
 
 ### ✅ 完全実装済み機能
