@@ -124,30 +124,84 @@ export async function onRequest(context: EventContext<Env>): Promise<Response> {
       });
     }
 
-    // Always use mock data for now to ensure it works
     console.log('Postal search request for zipcode:', cleanedCode);
-    
-    // Mock data response
-    const addressInfo = getMockAddress(cleanedCode);
-    const mockAddress = {
-      dgacode: cleanedCode,
-      zip_code: `${cleanedCode.slice(0, 3)}-${cleanedCode.slice(3)}`,
-      pref_name: addressInfo.pref,
-      city_name: addressInfo.city,
-      town_name: addressInfo.town,
-      street_name: '1丁目',
-      building_name: '',
-      pref_kana: 'カナ',
-      city_kana: 'カナ',
-      town_kana: 'カナ'
-    };
 
-    return new Response(JSON.stringify({
-      success: true,
-      data: mockAddress
-    }), {
-      headers: { 'Content-Type': 'application/json', ...CORS_HEADERS }
-    });
+    // Try Japan Post API first, fallback to mock data on error
+    try {
+      const accessToken = await getAccessToken(context.env);
+      const config = getAPIConfig(context.env);
+      const SEARCH_CODE_URL = `https://${config.API_HOST}/api/v1/searchcode/${cleanedCode}`;
+      
+      console.log('Calling Japan Post API:', SEARCH_CODE_URL);
+      
+      const response = await fetch(SEARCH_CODE_URL, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+          'User-Agent': 'Mozilla/5.0 (compatible; node client)'
+        },
+      });
+
+      if (!response.ok) {
+        let errorMessage = `Japan Post API error: ${response.status} ${response.statusText}`;
+        try {
+          const errorData = await response.json() as any;
+          if (errorData.error_description) {
+            errorMessage = errorData.error_description;
+          }
+        } catch {
+          // JSON parsing failed, use default message
+        }
+        
+        console.log('Japan Post API error, falling back to mock data:', errorMessage);
+        throw new Error(errorMessage);
+      }
+
+      const data = await response.json();
+      console.log('Japan Post API response:', data);
+      
+      if (!data || !data.addresses || data.addresses.length === 0) {
+        console.log('No addresses found, falling back to mock data');
+        throw new Error('No addresses found');
+      }
+
+      const address = data.addresses[0];
+      return new Response(JSON.stringify({
+        success: true,
+        data: address,
+        source: 'japan_post_api'
+      }), {
+        headers: { 'Content-Type': 'application/json', ...CORS_HEADERS }
+      });
+      
+    } catch (apiError) {
+      console.error('Japan Post API error, using fallback:', apiError);
+      
+      // Fallback to mock data if API fails
+      const addressInfo = getMockAddress(cleanedCode);
+      const mockAddress = {
+        dgacode: cleanedCode,
+        zip_code: `${cleanedCode.slice(0, 3)}-${cleanedCode.slice(3)}`,
+        pref_name: addressInfo.pref,
+        city_name: addressInfo.city,
+        town_name: addressInfo.town,
+        street_name: '1丁目',
+        building_name: '',
+        pref_kana: 'カナ',
+        city_kana: 'カナ',
+        town_kana: 'カナ'
+      };
+
+      return new Response(JSON.stringify({
+        success: true,
+        data: mockAddress,
+        source: 'mock_data',
+        fallback_reason: apiError instanceof Error ? apiError.message : 'API error'
+      }), {
+        headers: { 'Content-Type': 'application/json', ...CORS_HEADERS }
+      });
+    }
 
   } catch (error) {
     console.error('Postal code search error:', error);
