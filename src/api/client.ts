@@ -41,6 +41,7 @@ export const api = {
       status?: string;
       startDate?: string;
       endDate?: string;
+      shipperId?: number;
     }): Promise<PaginatedResponse<Order>> => {
       const response = await apiClient.get('/orders', { params });
       return response.data;
@@ -138,8 +139,13 @@ export const api = {
 
   // 商品関連
   products: {
-    list: async (): Promise<ApiResponse<Product[]>> => {
-      const response = await apiClient.get('/products');
+    list: async (params?: { 
+      page?: number; 
+      limit?: number; 
+      search?: string; 
+      category?: string;
+    }): Promise<PaginatedResponse<Product>> => {
+      const response = await apiClient.get('/products', { params });
       return response.data;
     },
 
@@ -151,8 +157,13 @@ export const api = {
 
   // 集配所関連
   stores: {
-    list: async (): Promise<ApiResponse<Store[]>> => {
-      const response = await apiClient.get('/stores');
+    list: async (params?: { 
+      page?: number; 
+      limit?: number; 
+      search?: string; 
+      carrier?: string;
+    }): Promise<PaginatedResponse<Store>> => {
+      const response = await apiClient.get('/stores', { params });
       return response.data;
     },
 

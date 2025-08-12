@@ -22,10 +22,10 @@ INSERT INTO Consignee (ConsigneeId, AddressId, ConsigneeCode, DeliveryInstructio
 
 -- 商品データ
 INSERT INTO ProductMaster (ProductId, ProductCode, ProductName, ProductCategory, UnitPrice, Weight, IsFragile, IsDefault, IsActive) VALUES
-(1, 'PRD001', '宅急便60サイズ', '宅急便', 930, 2.0, 0, 1, 1),
-(2, 'PRD002', '宅急便80サイズ', '宅急便', 1200, 5.0, 0, 0, 1),
-(3, 'PRD003', '宅急便100サイズ', '宅急便', 1500, 10.0, 0, 0, 1),
-(4, 'PRD004', 'クール宅急便', 'クール便', 1650, 5.0, 1, 0, 1);
+(1, 'APPLE5', 'りんご 5kg', '果物', 2500, 5.0, 1, 1, 1),
+(2, 'APPLE10', 'りんご 10kg', '果物', 4500, 10.0, 1, 0, 1),
+(3, 'PEACH5', '桃 5kg', '果物', 3500, 5.0, 1, 0, 1),
+(4, 'PEACH10', '桃 10kg', '果物', 6500, 10.0, 1, 0, 1);
 
 -- 集配所データ
 INSERT INTO Store (StoreId, StoreCode, StoreName, CarrierCode, CarrierName, ContactPhone, ServiceArea, CutoffTime, IsDefault, IsActive) VALUES
@@ -35,6 +35,6 @@ INSERT INTO Store (StoreId, StoreCode, StoreName, CarrierCode, CarrierName, Cont
 
 -- 注文データ
 INSERT INTO "Order" (OrderId, OrderNumber, OrderDate, ShipperId, ConsigneeId, ProductId, StoreId, Quantity, UnitPrice, TotalAmount, OrderStatus) VALUES
-(1, 'ORD-2024-001', '2024-01-15', 1, 1, 1, 1, 1, 930, 930, '完了'),
-(2, 'ORD-2024-002', '2024-01-16', 2, 3, 4, 2, 2, 1650, 3300, '受付'),
-(3, 'ORD-2024-003', '2024-01-17', 3, 1, 3, 3, 1, 1500, 1500, '完了');
+(1, 'ORD-2024-001', '2024-01-15', 1, 1, 1, 1, 1, 2500, 2500, '完了'),
+(2, 'ORD-2024-002', '2024-01-16', 2, 3, 4, 2, 2, 6500, 13000, '受付'),
+(3, 'ORD-2024-003', '2024-01-17', 3, 1, 3, 3, 1, 3500, 3500, '完了');

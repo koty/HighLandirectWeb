@@ -170,6 +170,447 @@ router.post('/api/shippers', async (request, env) => {
   }
 })
 
+// Orders API
+router.get('/api/orders', async (request, env) => {
+  const url = new URL(request.url)
+  const page = parseInt(url.searchParams.get('page') || '1')
+  const limit = parseInt(url.searchParams.get('limit') || '10')
+  const search = url.searchParams.get('search')
+  const status = url.searchParams.get('status')
+  const shipperId = url.searchParams.get('shipperId')
+  
+  let query = `
+    SELECT 
+      o.OrderId,
+      o.OrderNumber,
+      o.OrderDate,
+      o.ShipperId,
+      o.ConsigneeId,
+      o.ProductId,
+      o.StoreId,
+      o.Quantity,
+      o.UnitPrice,
+      o.TotalAmount,
+      o.OrderStatus,
+      o.RequestedDeliveryDate,
+      o.ActualDeliveryDate,
+      o.TrackingNumber,
+      o.SpecialInstructions,
+      o.CreatedAt,
+      o.UpdatedAt,
+      sa.Name as ShipperName,
+      ca.Name as ConsigneeName,
+      p.ProductName,
+      st.StoreName
+    FROM "Order" o
+    LEFT JOIN Shipper s ON o.ShipperId = s.ShipperId
+    LEFT JOIN Address sa ON s.AddressId = sa.AddressId
+    LEFT JOIN Consignee c ON o.ConsigneeId = c.ConsigneeId  
+    LEFT JOIN Address ca ON c.AddressId = ca.AddressId
+    LEFT JOIN ProductMaster p ON o.ProductId = p.ProductId
+    LEFT JOIN Store st ON o.StoreId = st.StoreId
+    WHERE 1=1
+  `
+  
+  const params = []
+  
+  if (search) {
+    query += ` AND (o.OrderNumber LIKE ? OR sa.Name LIKE ? OR ca.Name LIKE ?)`
+    const searchTerm = `%${search}%`
+    params.push(searchTerm, searchTerm, searchTerm)
+  }
+  
+  if (status && status !== 'all') {
+    query += ` AND o.OrderStatus = ?`
+    params.push(status)
+  }
+  
+  if (shipperId) {
+    query += ` AND o.ShipperId = ?`
+    params.push(parseInt(shipperId))
+  }
+  
+  query += ` ORDER BY o.CreatedAt DESC`
+  
+  const offset = (page - 1) * limit
+  query += ` LIMIT ? OFFSET ?`
+  params.push(limit, offset)
+  
+  try {
+    const { results } = await env.DB.prepare(query).bind(...params).all()
+    
+    // Count total records
+    let countQuery = `
+      SELECT COUNT(*) as total
+      FROM "Order" o
+      LEFT JOIN Shipper s ON o.ShipperId = s.ShipperId
+      LEFT JOIN Address sa ON s.AddressId = sa.AddressId
+      LEFT JOIN Consignee c ON o.ConsigneeId = c.ConsigneeId
+      LEFT JOIN Address ca ON c.AddressId = ca.AddressId
+      WHERE 1=1
+    `
+    
+    const countParams = []
+    
+    if (search) {
+      countQuery += ` AND (o.OrderNumber LIKE ? OR sa.Name LIKE ? OR ca.Name LIKE ?)`
+      const searchTerm = `%${search}%`
+      countParams.push(searchTerm, searchTerm, searchTerm)
+    }
+    
+    if (status && status !== 'all') {
+      countQuery += ` AND o.OrderStatus = ?`
+      countParams.push(status)
+    }
+    
+    if (shipperId) {
+      countQuery += ` AND o.ShipperId = ?`
+      countParams.push(parseInt(shipperId))
+    }
+    
+    const countResult = await env.DB.prepare(countQuery).bind(...countParams).first()
+    const total = countResult?.total || 0
+    
+    return new Response(JSON.stringify({
+      success: true,
+      data: results || [],
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit)
+      }
+    }), {
+      headers: { 'Content-Type': 'application/json', ...CORS_HEADERS }
+    })
+  } catch (error) {
+    return new Response(JSON.stringify({
+      success: false,
+      error: error.message
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...CORS_HEADERS }
+    })
+  }
+})
+
+router.post('/api/orders', async (request, env) => {
+  const data = await request.json()
+  
+  try {
+    // Generate order number
+    const orderNumber = `ORD-${new Date().getFullYear()}-${Date.now().toString().slice(-6)}`
+    
+    const query = `
+      INSERT INTO "Order" (
+        OrderNumber, OrderDate, ShipperId, ConsigneeId, ProductId, StoreId,
+        Quantity, UnitPrice, TotalAmount, OrderStatus, RequestedDeliveryDate, SpecialInstructions
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `
+    
+    const result = await env.DB.prepare(query).bind(
+      orderNumber,
+      data.OrderDate || new Date().toISOString().split('T')[0],
+      data.ShipperId,
+      data.ConsigneeId,
+      data.ProductId,
+      data.StoreId,
+      data.Quantity || 1,
+      data.UnitPrice || 0,
+      data.TotalAmount || 0,
+      data.OrderStatus || '受付',
+      data.DeliveryDate || null,
+      data.SpecialInstructions || null
+    ).run()
+    
+    return new Response(JSON.stringify({
+      success: true,
+      data: {
+        OrderId: result.meta.last_row_id,
+        OrderNumber: orderNumber,
+        ...data
+      }
+    }), {
+      headers: { 'Content-Type': 'application/json', ...CORS_HEADERS }
+    })
+  } catch (error) {
+    return new Response(JSON.stringify({
+      success: false,
+      error: error.message
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...CORS_HEADERS }
+    })
+  }
+})
+
+// Consignees API
+router.get('/api/consignees', async (request, env) => {
+  const url = new URL(request.url)
+  const page = parseInt(url.searchParams.get('page') || '1')
+  const limit = parseInt(url.searchParams.get('limit') || '10')
+  const search = url.searchParams.get('search')
+  
+  let query = `
+    SELECT 
+      c.ConsigneeId,
+      c.AddressId,
+      a.Name,
+      a.Furigana,
+      a.Keisho,
+      a.PostalCD,
+      a.PrefectureName,
+      a.CityName,
+      a.Address1,
+      a.Address2,
+      a.Phone,
+      a.Fax,
+      a.MailAddress,
+      a.Memo,
+      c.ConsigneeCode,
+      c.DeliveryInstructions,
+      c.AccessInfo,
+      c.PreferredDeliveryTime,
+      c.SpecialHandling,
+      c.IsActive,
+      c.CreatedAt,
+      c.UpdatedAt
+    FROM Consignee c
+    LEFT JOIN Address a ON c.AddressId = a.AddressId
+    WHERE c.IsActive = 1
+  `
+  
+  const params = []
+  
+  if (search) {
+    query += ` AND (a.Name LIKE ? OR a.Address1 LIKE ? OR a.Phone LIKE ?)`
+    const searchTerm = `%${search}%`
+    params.push(searchTerm, searchTerm, searchTerm)
+  }
+  
+  query += ` ORDER BY c.CreatedAt DESC, a.Name ASC`
+  
+  const offset = (page - 1) * limit
+  query += ` LIMIT ? OFFSET ?`
+  params.push(limit, offset)
+  
+  try {
+    const { results } = await env.DB.prepare(query).bind(...params).all()
+    
+    // Count total records
+    const countQuery = `
+      SELECT COUNT(*) as total
+      FROM Consignee c
+      LEFT JOIN Address a ON c.AddressId = a.AddressId
+      WHERE c.IsActive = 1` + (search ? ` AND (a.Name LIKE ? OR a.Address1 LIKE ? OR a.Phone LIKE ?)` : '')
+    
+    const countParams = search ? [`%${search}%`, `%${search}%`, `%${search}%`] : []
+    const countResult = await env.DB.prepare(countQuery).bind(...countParams).first()
+    const total = countResult?.total || 0
+    
+    return new Response(JSON.stringify({
+      success: true,
+      data: results || [],
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit)
+      }
+    }), {
+      headers: { 'Content-Type': 'application/json', ...CORS_HEADERS }
+    })
+  } catch (error) {
+    return new Response(JSON.stringify({
+      success: false,
+      error: error.message
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...CORS_HEADERS }
+    })
+  }
+})
+
+// Products API
+router.get('/api/products', async (request, env) => {
+  const url = new URL(request.url)
+  const page = parseInt(url.searchParams.get('page') || '1')
+  const limit = parseInt(url.searchParams.get('limit') || '10')
+  const search = url.searchParams.get('search')
+  const category = url.searchParams.get('category')
+  
+  let query = `
+    SELECT 
+      ProductId,
+      ProductCode,
+      ProductName,
+      ProductCategory,
+      UnitPrice,
+      TaxRate,
+      Weight,
+      Dimensions,
+      IsFragile,
+      IsDefault,
+      IsActive,
+      CreatedAt,
+      UpdatedAt
+    FROM ProductMaster
+    WHERE IsActive = 1
+  `
+  
+  const params = []
+  
+  if (search) {
+    query += ` AND (ProductName LIKE ? OR ProductCode LIKE ?)`
+    const searchTerm = `%${search}%`
+    params.push(searchTerm, searchTerm)
+  }
+  
+  if (category && category !== 'all') {
+    query += ` AND ProductCategory = ?`
+    params.push(category)
+  }
+  
+  query += ` ORDER BY IsDefault DESC, ProductName ASC`
+  
+  const offset = (page - 1) * limit
+  query += ` LIMIT ? OFFSET ?`
+  params.push(limit, offset)
+  
+  try {
+    const { results } = await env.DB.prepare(query).bind(...params).all()
+    
+    // Count total records
+    let countQuery = `SELECT COUNT(*) as total FROM ProductMaster WHERE IsActive = 1`
+    const countParams = []
+    
+    if (search) {
+      countQuery += ` AND (ProductName LIKE ? OR ProductCode LIKE ?)`
+      const searchTerm = `%${search}%`
+      countParams.push(searchTerm, searchTerm)
+    }
+    
+    if (category && category !== 'all') {
+      countQuery += ` AND ProductCategory = ?`
+      countParams.push(category)
+    }
+    
+    const countResult = await env.DB.prepare(countQuery).bind(...countParams).first()
+    const total = countResult?.total || 0
+    
+    return new Response(JSON.stringify({
+      success: true,
+      data: results || [],
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit)
+      }
+    }), {
+      headers: { 'Content-Type': 'application/json', ...CORS_HEADERS }
+    })
+  } catch (error) {
+    return new Response(JSON.stringify({
+      success: false,
+      error: error.message
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...CORS_HEADERS }
+    })
+  }
+})
+
+// Stores API
+router.get('/api/stores', async (request, env) => {
+  const url = new URL(request.url)
+  const page = parseInt(url.searchParams.get('page') || '1')
+  const limit = parseInt(url.searchParams.get('limit') || '10')
+  const search = url.searchParams.get('search')
+  const carrier = url.searchParams.get('carrier')
+  
+  let query = `
+    SELECT 
+      StoreId,
+      StoreCode,
+      StoreName,
+      CarrierCode,
+      CarrierName,
+      RegionCode,
+      ContactPhone,
+      ServiceArea,
+      CutoffTime,
+      IsDefault,
+      IsActive,
+      CreatedAt,
+      UpdatedAt
+    FROM Store
+    WHERE IsActive = 1
+  `
+  
+  const params = []
+  
+  if (search) {
+    query += ` AND (StoreName LIKE ? OR ServiceArea LIKE ?)`
+    const searchTerm = `%${search}%`
+    params.push(searchTerm, searchTerm)
+  }
+  
+  if (carrier && carrier !== 'all') {
+    query += ` AND CarrierCode = ?`
+    params.push(carrier)
+  }
+  
+  query += ` ORDER BY IsDefault DESC, StoreName ASC`
+  
+  const offset = (page - 1) * limit
+  query += ` LIMIT ? OFFSET ?`
+  params.push(limit, offset)
+  
+  try {
+    const { results } = await env.DB.prepare(query).bind(...params).all()
+    
+    // Count total records
+    let countQuery = `SELECT COUNT(*) as total FROM Store WHERE IsActive = 1`
+    const countParams = []
+    
+    if (search) {
+      countQuery += ` AND (StoreName LIKE ? OR ServiceArea LIKE ?)`
+      const searchTerm = `%${search}%`
+      countParams.push(searchTerm, searchTerm)
+    }
+    
+    if (carrier && carrier !== 'all') {
+      countQuery += ` AND CarrierCode = ?`
+      countParams.push(carrier)
+    }
+    
+    const countResult = await env.DB.prepare(countQuery).bind(...countParams).first()
+    const total = countResult?.total || 0
+    
+    return new Response(JSON.stringify({
+      success: true,
+      data: results || [],
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit)
+      }
+    }), {
+      headers: { 'Content-Type': 'application/json', ...CORS_HEADERS }
+    })
+  } catch (error) {
+    return new Response(JSON.stringify({
+      success: false,
+      error: error.message
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...CORS_HEADERS }
+    })
+  }
+})
+
 // Postal code search API
 router.get('/api/postal/search/:zipcode', async (request, env) => {
   const { zipcode } = request.params

@@ -28,9 +28,10 @@ import dayjs, { Dayjs } from 'dayjs'
 import { useSnackbar } from 'notistack'
 import DeleteIcon from '@mui/icons-material/Delete'
 
-import type { OrderFormData, OrderDetail, Shipper, Consignee, ProductMaster, Store, Order } from '@/types'
+import type { OrderFormData, OrderDetail, Consignee, Order } from '@/types'
 import { useQuery } from 'react-query'
 import axios from 'axios'
+import { api } from '@/api/client'
 
 const schema = yup.object({
   OrderDate: yup.string().required('注文日は必須です'),
@@ -56,23 +57,19 @@ const OrderForm: React.FC = () => {
 
   // APIからデータを取得
   const { data: shippersData } = useQuery('shippers-all', async () => {
-    const response = await axios.get('/api/shippers', { params: { limit: 1000 } })
-    return response.data
+    return api.shippers.list({ limit: 1000 })
   })
 
   const { data: consigneesData } = useQuery('consignees-all', async () => {
-    const response = await axios.get('/api/consignees', { params: { limit: 1000 } })
-    return response.data
+    return api.consignees.list({ limit: 1000 })
   })
 
   const { data: productsData } = useQuery('products-all', async () => {
-    const response = await axios.get('/api/products', { params: { limit: 1000 } })
-    return response.data
+    return api.products.list({ limit: 1000 })
   })
 
   const { data: storesData } = useQuery('stores-all', async () => {
-    const response = await axios.get('/api/stores', { params: { limit: 1000 } })
-    return response.data
+    return api.stores.list({ limit: 1000 })
   })
 
   const shippers = shippersData?.data || []
@@ -112,14 +109,12 @@ const OrderForm: React.FC = () => {
       // APIから選択された荷主の送付履歴を取得
       const fetchHistory = async () => {
         try {
-          const response = await axios.get('/api/orders', {
-            params: {
-              page: 1,
-              limit: 50,
-              shipperId: watchedShipperId
-            }
+          const response = await api.orders.list({
+            page: 1,
+            limit: 50,
+            shipperId: watchedShipperId
           })
-          setShipperHistory(response.data.data || [])
+          setShipperHistory(response.data || [])
         } catch (error) {
           console.error('Error fetching shipper history:', error)
           setShipperHistory([])
@@ -187,30 +182,58 @@ const OrderForm: React.FC = () => {
         // TODO: PUT API for editing
         enqueueSnackbar('注文を更新しました', { variant: 'success' })
       } else {
-        // Calculate total amount from order details
-        const totalAmount = orderDetails.reduce((sum, detail) => sum + (detail.unitPrice * detail.quantity), 0)
-        const totalQuantity = orderDetails.reduce((sum, detail) => sum + detail.quantity, 0)
-        
-        // POST API for creating new order
-        const response = await axios.post('/api/orders', {
-          ShipperId: selectedShipper?.ShipperId || 1,
-          ConsigneeId: selectedConsignee?.ConsigneeId || 1,
-          ProductId: selectedProduct?.ProductId || 1,
-          StoreId: selectedStore?.StoreId || 1,
-          Quantity: totalQuantity,
-          UnitPrice: totalAmount > 0 ? Math.round(totalAmount / totalQuantity) : 0,
-          TotalAmount: totalAmount,
-          OrderDate: data.orderDate?.format('YYYY-MM-DD') || new Date().toISOString().split('T')[0],
-          DeliveryDate: data.deliveryDate?.format('YYYY-MM-DD') || null,
-          SpecialInstructions: data.specialInstructions || null,
-          OrderStatus: '受付'
-        })
-        
-        if (response.data.success) {
-          enqueueSnackbar('注文を作成しました', { variant: 'success' })
-        } else {
-          throw new Error(response.data.error || '作成に失敗しました')
+        // バリデーション: 注文明細が必要
+        const orderDetails = data.OrderDetails || []
+        if (orderDetails.length === 0) {
+          throw new Error('注文明細を少なくとも1件追加してください')
         }
+
+        // 各明細の詳細バリデーション
+        const validationErrors: string[] = []
+        orderDetails.forEach((detail, index) => {
+          if (!detail.ProductId || detail.ProductId === '' || typeof detail.ProductId !== 'number') {
+            validationErrors.push(`明細${index + 1}: 商品を選択してください`)
+          }
+          if (!detail.Quantity || detail.Quantity <= 0) {
+            validationErrors.push(`明細${index + 1}: 数量を1以上で入力してください`)
+          }
+          if (!detail.ConsigneeId) {
+            validationErrors.push(`明細${index + 1}: 送付先が選択されていません`)
+          }
+        })
+
+        if (validationErrors.length > 0) {
+          throw new Error(validationErrors.join(', '))
+        }
+
+        // 各明細についてOrderを作成
+        const createOrderPromises = orderDetails.map(async (detail) => {
+          const totalAmount = (detail.Quantity || 0) * (detail.UnitPrice || 0)
+          
+          return axios.post('/api/orders', {
+            ShipperId: data.ShipperId,
+            ConsigneeId: detail.ConsigneeId,
+            ProductId: detail.ProductId,
+            StoreId: data.StoreId,
+            Quantity: detail.Quantity,
+            UnitPrice: detail.UnitPrice || 0,
+            TotalAmount: totalAmount,
+            OrderDate: data.OrderDate,
+            DeliveryDate: data.RequestedDeliveryDate || null,
+            SpecialInstructions: data.SpecialInstructions || null,
+            OrderStatus: '受付'
+          })
+        })
+
+        // すべての注文明細を並行して作成
+        const responses = await Promise.all(createOrderPromises)
+        const failedResponses = responses.filter(response => !response.data.success)
+        
+        if (failedResponses.length > 0) {
+          throw new Error(`${failedResponses.length}件の注文作成に失敗しました`)
+        }
+        
+        enqueueSnackbar(`${responses.length}件の注文を作成しました`, { variant: 'success' })
       }
       
       navigate('/orders')
@@ -218,7 +241,7 @@ const OrderForm: React.FC = () => {
       console.error('Error:', error)
       const errorMessage = axios.isAxiosError(error) 
         ? error.response?.data?.error || error.message
-        : 'エラーが発生しました'
+        : error instanceof Error ? error.message : 'エラーが発生しました'
       enqueueSnackbar(errorMessage, { variant: 'error' })
     }
   }
@@ -263,12 +286,12 @@ const OrderForm: React.FC = () => {
                   control={control}
                   render={({ field }) => (
                     <Autocomplete
-                      value={shippers.find(s => s.ShipperId === field.value) || null}
-                      onChange={(_, shipper) => {
+                      value={shippers.find((s: any) => s.ShipperId === field.value) || null}
+                      onChange={(_, shipper: any) => {
                         field.onChange(shipper?.ShipperId || '')
                       }}
                       options={shippers}
-                      getOptionLabel={(option) => `${option.Name} (${option.ShipperCode})`}
+                      getOptionLabel={(option: any) => `${option.Name || 'Unknown'} (${option.ShipperCode || ''})`}
                       renderInput={(params) => (
                         <TextField
                           {...params}
@@ -320,7 +343,7 @@ const OrderForm: React.FC = () => {
                                   value={detail.ProductId || ''}
                                   onChange={(e) => {
                                     const productId = Number(e.target.value)
-                                    const product = products.find(p => p.ProductId === productId)
+                                    const product = products.find((p: any) => p.ProductId === productId)
                                     updateOrderDetail(detail.id, {
                                       ProductId: productId,
                                       Product: product,
@@ -329,7 +352,7 @@ const OrderForm: React.FC = () => {
                                   }}
                                   sx={{ minWidth: 150 }}
                                 >
-                                  {products.map((product) => (
+                                  {products.map((product: any) => (
                                     <MenuItem key={product.ProductId} value={product.ProductId}>
                                       {product.ProductName}
                                     </MenuItem>
@@ -381,7 +404,7 @@ const OrderForm: React.FC = () => {
                 
                 <Autocomplete
                   options={consignees}
-                  getOptionLabel={(option) => `${option.Name} (${option.ConsigneeCode})`}
+                  getOptionLabel={(option: any) => `${option.Name || 'Unknown'} (${option.ConsigneeCode || ''})`}
                   renderInput={(params) => (
                     <TextField
                       {...params}
@@ -416,7 +439,7 @@ const OrderForm: React.FC = () => {
                       error={Boolean(errors.StoreId)}
                       helperText={errors.StoreId?.message}
                     >
-                      {stores.map((store) => (
+                      {stores.map((store: any) => (
                         <MenuItem key={store.StoreId} value={store.StoreId}>
                           {store.StoreName} - {store.ServiceArea}
                         </MenuItem>
@@ -524,8 +547,8 @@ const OrderForm: React.FC = () => {
                       </TableCell>
                       <TableCell>{order.OrderNumber}</TableCell>
                       <TableCell>{order.OrderDate}</TableCell>
-                      <TableCell>{order.ConsigneeName || '-'}</TableCell>
-                      <TableCell>{order.ProductName || '-'}</TableCell>
+                      <TableCell>{order.Consignee?.Name || '-'}</TableCell>
+                      <TableCell>{order.Product?.ProductName || '-'}</TableCell>
                       <TableCell>{order.Quantity}</TableCell>
                       <TableCell>¥{order.TotalAmount?.toLocaleString() || 0}</TableCell>
                     </TableRow>
