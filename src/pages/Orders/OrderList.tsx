@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   Box,
   Button,
@@ -14,6 +14,7 @@ import {
   MenuList,
   ListItemIcon,
   ListItemText,
+  CircularProgress,
 } from '@mui/material'
 import {
   Add as AddIcon,
@@ -27,22 +28,74 @@ import { useNavigate } from 'react-router-dom'
 import dayjs from 'dayjs'
 
 import type { Order } from '@/types'
-import { mockOrders } from '@/data/mockData'
+import { api } from '@/api/client'
 
 const OrderList: React.FC = () => {
   const navigate = useNavigate()
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [searchTerm, setSearchTerm] = useState('')
+  const [orders, setOrders] = useState<Order[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 10,
+    total: 0,
+    totalPages: 0
+  })
 
-  // フィルタリング処理
-  const filteredOrders = mockOrders.filter((order) => {
-    const matchesStatus = statusFilter === 'all' || order.OrderStatus === statusFilter
+  // API呼び出し
+  const fetchOrders = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      const params: any = {
+        page: pagination.page,
+        limit: pagination.limit
+      }
+      
+      if (statusFilter !== 'all') {
+        params.status = statusFilter
+      }
+
+      console.log('Fetching orders with params:', params) // デバッグログ
+      const response = await api.orders.list(params)
+      
+      console.log('API Response:', response) // デバッグログ
+      
+      if (response.success) {
+        setOrders(response.data)
+        if (response.pagination) {
+          setPagination(prev => ({
+            ...prev,
+            total: response.pagination.total,
+            totalPages: response.pagination.totalPages
+          }))
+        }
+      } else {
+        setError('データの取得に失敗しました')
+      }
+    } catch (error) {
+      console.error('Orders API Error:', error) // デバッグログ
+      setError('データの取得に失敗しました')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // 初回読み込みと依存値変更時の再読み込み
+  useEffect(() => {
+    fetchOrders()
+  }, [statusFilter, pagination.page, pagination.limit])
+
+  // フィルタリング処理（クライアントサイド検索用）
+  const filteredOrders = orders.filter((order) => {
     const matchesSearch = searchTerm === '' || 
       order.OrderNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.Shipper?.Address?.Name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.Consignee?.Address?.Name?.toLowerCase().includes(searchTerm.toLowerCase())
+      order.ShipperName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      order.ConsigneeName?.toLowerCase().includes(searchTerm.toLowerCase())
     
-    return matchesStatus && matchesSearch
+    return matchesSearch
   })
 
   const getStatusColor = (status: Order['OrderStatus']) => {
@@ -78,16 +131,14 @@ const OrderList: React.FC = () => {
       valueFormatter: (params) => dayjs(params.value).format('YYYY/MM/DD'),
     },
     {
-      field: 'shipperName',
+      field: 'ShipperName',
       headerName: '荷主',
       width: 200,
-      valueGetter: (params) => params.row.Shipper?.Address?.Name || '',
     },
     {
-      field: 'consigneeName',
+      field: 'ConsigneeName',
       headerName: '送付先',
       width: 200,
-      valueGetter: (params) => params.row.Consignee?.Address?.Name || '',
     },
     {
       field: 'TotalAmount',
@@ -180,10 +231,10 @@ const OrderList: React.FC = () => {
                 onChange={(e) => setStatusFilter(e.target.value)}
               >
                 <MenuItem value="all">すべて</MenuItem>
-                <MenuItem value="pending">受付</MenuItem>
-                <MenuItem value="processing">処理中</MenuItem>
-                <MenuItem value="completed">完了</MenuItem>
-                <MenuItem value="cancelled">キャンセル</MenuItem>
+                <MenuItem value="受付">受付</MenuItem>
+                <MenuItem value="処理中">処理中</MenuItem>
+                <MenuItem value="完了">完了</MenuItem>
+                <MenuItem value="キャンセル">キャンセル</MenuItem>
               </TextField>
             </Grid>
           </Grid>
@@ -192,10 +243,22 @@ const OrderList: React.FC = () => {
 
       <Card>
         <Box sx={{ height: 600, width: '100%' }}>
-          <DataGrid
-            rows={filteredOrders}
-            columns={columns}
-            getRowId={(row) => row.OrderId}
+          {loading && (
+            <Box display="flex" justifyContent="center" alignItems="center" height="400px">
+              <CircularProgress />
+            </Box>
+          )}
+          {error && (
+            <Box p={2}>
+              <Typography color="error">{error}</Typography>
+              <Button onClick={fetchOrders}>再読み込み</Button>
+            </Box>
+          )}
+          {!loading && !error && (
+            <DataGrid
+              rows={filteredOrders}
+              columns={columns}
+              getRowId={(row) => row.OrderID}
             initialState={{
               pagination: {
                 paginationModel: {
@@ -212,7 +275,8 @@ const OrderList: React.FC = () => {
                 outline: 'none',
               },
             }}
-          />
+            />
+          )}
         </Box>
       </Card>
     </Box>
