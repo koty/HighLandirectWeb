@@ -14,14 +14,14 @@ npx wrangler login
 
 ### 2. Create D1 Database
 ```bash
-npx wrangler d1 create highlander-db
+npx wrangler d1 create highlandirect-db
 ```
 
 This will output something like:
 ```
 [[d1_databases]]
 binding = "DB"
-database_name = "highlander-db"
+database_name = "highlandirect-db"
 database_id = "xxxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
 ```
 
@@ -31,18 +31,18 @@ Copy the `database_id` from step 2 and update `wrangler.toml`:
 ```toml
 [[d1_databases]]
 binding = "DB"
-database_name = "highlander-db"
+database_name = "highlandirect-db"
 database_id = "YOUR_ACTUAL_DATABASE_ID_HERE"
 ```
 
 ### 4. Create Database Schema
 ```bash
-npx wrangler d1 execute highlander-db --file=migration/schema.sql
+npx wrangler d1 execute highlandirect-db --file=migration/schema.sql
 ```
 
 ### 5. Insert Initial Data
 ```bash
-npx wrangler d1 execute highlander-db --file=migration/seed.sql
+npx wrangler d1 execute highlandirect-db --file=migration/seed.sql
 ```
 
 ### 6. Configure CloudFlare Pages
@@ -52,7 +52,7 @@ npx wrangler d1 execute highlander-db --file=migration/seed.sql
 3. Go to **Settings** → **Functions**
 4. Add **D1 database binding**:
    - Variable name: `DB`
-   - D1 database: `highlander-db`
+   - D1 database: `highlandirect-db`
 
 ### 7. Deploy and Test
 
@@ -65,7 +65,7 @@ npx wrangler d1 execute highlander-db --file=migration/seed.sql
 
 Test database connectivity:
 ```bash
-npx wrangler d1 execute highlander-db --command="SELECT COUNT(*) FROM 'Order'"
+npx wrangler d1 execute highlandirect-db --command="SELECT COUNT(*) FROM 'Order'"
 ```
 
 Expected result: `{"count(*)":3}` (3 initial orders)

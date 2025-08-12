@@ -96,13 +96,13 @@ MigrationTool.exe "C:/path/to/MyData.sdf" "C:/path/to/new_database.sqlite"
 
 ```bash
 # D1データベース作成
-wrangler d1 create highlander-db
+wrangler d1 create highlandirect-db
 
 # スキーマ適用
-wrangler d1 execute highlander-db --file=./schema.sql
+wrangler d1 execute highlandirect-db --file=./schema.sql
 
 # データインポート
-wrangler d1 execute highlander-db --file=./data_dump.sql
+wrangler d1 execute highlandirect-db --file=./data_dump.sql
 ```
 
 ## トラブルシューティング

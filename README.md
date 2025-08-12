@@ -66,7 +66,7 @@ npm run dev:workers
 
 # D1データベース作成（要認証）
 cd backend
-npx wrangler d1 create highlander-db
+npx wrangler d1 create highlandirect-db
 ```
 
 ## デプロイ

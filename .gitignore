@@ -128,7 +128,7 @@ wrangler.toml.bak
 # Migration output
 migration/*.sqlite
 migration/*.db
-migration/highlander.sqlite
+migration/highlandirect.sqlite
 
 # TypeScript
 *.tsbuildinfo

@@ -5,8 +5,8 @@ compatibility_date = "2023-12-01"
 # D1 Database binding
 [[d1_databases]]
 binding = "DB"
-database_name = "highlander-db"
-database_id = "your-d1-database-id" # wrangler d1 create で取得したIDを設定
+database_name = "highlandirect-db"
+database_id = "4c827b08-7b7c-484e-9d3b-6e6a153842bb"
 
 # Environment variables are managed via wrangler secrets and local .env
 # Use: wrangler secret put <SECRET_NAME> for sensitive values

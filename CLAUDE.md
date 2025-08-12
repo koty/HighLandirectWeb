@@ -28,7 +28,7 @@ npm run type-check   # TypeScript型チェック
 npm run dev:workers  # Workers開発環境 (port 8787)
 # または
 npx wrangler dev --port 8787
-wrangler d1 execute highlander-db --file=migration/schema.sql  # D1スキーマ適用
+wrangler d1 execute highlandirect-db --file=migration/schema.sql  # D1スキーマ適用
 ```
 
 ## Architecture Overview

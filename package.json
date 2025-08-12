@@ -1,5 +1,5 @@
 {
-  "name": "highlander-web",
+  "name": "highlandirect-web",
   "version": "1.0.0",
   "description": "HighLandirect Web版 - React + CloudFlare D1 + MUI",
   "private": true,

@@ -4,9 +4,8 @@ compatibility_date = "2025-08-12"
 # D1 Database binding for CloudFlare Pages
 [[d1_databases]]
 binding = "DB"
-database_name = "highlander-db"
-# database_id will be filled after creating the database
-database_id = "PLACEHOLDER"
+database_name = "highlandirect-db"
+database_id = "4c827b08-7b7c-484e-9d3b-6e6a153842bb"
 
 # CloudFlare Pages Functions configuration
 # This file is used for D1 database configuration only
