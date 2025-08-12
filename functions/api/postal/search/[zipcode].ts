@@ -18,10 +18,10 @@ const isTokenValid = (): boolean => {
 };
 
 const getAPIConfig = (env: Env): PostalAPIConfig => ({
-  API_HOST: env.VITE_JAPANPOST_API_HOST || 'guide-biz.da.pf.japanpost.jp',
-  CLIENT_ID: env.VITE_JAPANPOST_CLIENT_ID || '',
-  CLIENT_SECRET: env.VITE_JAPANPOST_CLIENT_SECRET || '',
-  CLIENT_IP: env.VITE_JAPANPOST_CLIENT_IP || '127.0.0.1',
+  API_HOST: env.JAPANPOST_API_HOST || 'guide-biz.da.pf.japanpost.jp',
+  CLIENT_ID: env.JAPANPOST_CLIENT_ID || '',
+  CLIENT_SECRET: env.JAPANPOST_CLIENT_SECRET || '',
+  CLIENT_IP: env.JAPANPOST_CLIENT_IP || '127.0.0.1',
 });
 
 const getAccessToken = async (env: Env): Promise<string> => {
@@ -31,6 +31,13 @@ const getAccessToken = async (env: Env): Promise<string> => {
   }
 
   const config = getAPIConfig(env);
+  console.log('Japan Post API Config:', {
+    API_HOST: config.API_HOST,
+    CLIENT_ID: config.CLIENT_ID ? '[SET]' : '[NOT_SET]',
+    CLIENT_SECRET: config.CLIENT_SECRET ? '[SET]' : '[NOT_SET]',
+    CLIENT_IP: config.CLIENT_IP
+  });
+  
   const TOKEN_URL = `https://${config.API_HOST}/api/v1/j/token`;
 
   const tokenRequest = {

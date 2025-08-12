@@ -2,10 +2,10 @@
 
 export interface Env {
   DB: D1Database;
-  VITE_JAPANPOST_CLIENT_ID?: string;
-  VITE_JAPANPOST_CLIENT_SECRET?: string;
-  VITE_JAPANPOST_API_HOST?: string;
-  VITE_JAPANPOST_CLIENT_IP?: string;
+  JAPANPOST_CLIENT_ID?: string;
+  JAPANPOST_CLIENT_SECRET?: string;
+  JAPANPOST_API_HOST?: string;
+  JAPANPOST_CLIENT_IP?: string;
 }
 
 export interface EventContext<Env = any, Params extends string = any, Data extends Record<string, unknown> = Record<string, unknown>> {
