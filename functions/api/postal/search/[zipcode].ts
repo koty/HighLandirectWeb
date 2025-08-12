@@ -18,7 +18,7 @@ const isTokenValid = (): boolean => {
 };
 
 const getAPIConfig = (env: Env): PostalAPIConfig => ({
-  API_HOST: env.JAPANPOST_API_HOST || 'guide-biz.da.pf.japanpost.jp',
+  API_HOST: env.JAPANPOST_API_HOST || 'api.da.pf.japanpost.jp',
   CLIENT_ID: env.JAPANPOST_CLIENT_ID || '',
   CLIENT_SECRET: env.JAPANPOST_CLIENT_SECRET || '',
   CLIENT_IP: env.JAPANPOST_CLIENT_IP || '127.0.0.1',
