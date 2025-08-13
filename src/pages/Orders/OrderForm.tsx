@@ -169,7 +169,7 @@ const OrderForm: React.FC = () => {
   }, [isEdit, orderData, consignees, products, setValue])
 
   // 注文明細を追加する関数
-  const addOrderDetail = (consignee: Consignee, order?: Order) => {
+  const addOrderDetail = (consignee: Consignee, orderDetail?: OrderDetailForm) => {
     const currentDetails = watch('OrderDetails') as OrderDetailForm[]
     
     // 既に同じ送付先の明細があるかチェック
@@ -179,14 +179,14 @@ const OrderForm: React.FC = () => {
     }
 
     const newDetail: OrderDetailForm = {
-      id: generateDetailId(),
+      id: orderDetail?.id || generateDetailId(),
       ConsigneeId: consignee.ConsigneeId,
       Consignee: consignee,
-      ProductId: order?.ProductId || '',
-      Product: order?.Product,
-      Quantity: order?.Quantity || 1,
-      UnitPrice: order?.UnitPrice,
-      TotalAmount: order?.TotalAmount,
+      ProductId: orderDetail?.ProductId || '',
+      Product: orderDetail?.Product,
+      Quantity: orderDetail?.Quantity || 1,
+      UnitPrice: orderDetail?.UnitPrice,
+      TotalAmount: orderDetail?.TotalAmount,
     }
 
     const updatedDetails = [...currentDetails, newDetail]
@@ -209,12 +209,6 @@ const OrderForm: React.FC = () => {
     setValue('OrderDetails', updatedDetails)
   }
 
-  // 履歴から送付先を追加する関数（注文明細として追加）
-  const addConsigneeFromHistory = (order: Order) => {
-    if (order.Consignee) {
-      addOrderDetail(order.Consignee, order)
-    }
-  }
 
   const onSubmit = async (data: OrderFormData) => {
     try {
@@ -549,32 +543,51 @@ const OrderForm: React.FC = () => {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {shipperHistory.map((order) => (
-                    <TableRow key={order.OrderId}>
-                      <TableCell padding="checkbox">
-                        <Checkbox
-                          checked={watchedOrderDetails.some(detail => detail.ConsigneeId === order.ConsigneeId)}
-                          onChange={(event) => {
-                            if (event.target.checked) {
-                              addConsigneeFromHistory(order)
-                            } else {
-                              // 該当する明細を削除
-                              const detailToRemove = watchedOrderDetails.find(detail => detail.ConsigneeId === order.ConsigneeId)
-                              if (detailToRemove) {
-                                removeOrderDetail(detailToRemove.id)
+                  {shipperHistory.map((order) => 
+                    // 新しいOrder+OrderDetail構造では、各OrderDetailsを展開して表示
+                    order.OrderDetails?.map((detail, detailIndex) => (
+                      <TableRow key={`${order.OrderId}-${detail.OrderDetailId}`}>
+                        <TableCell padding="checkbox">
+                          <Checkbox
+                            checked={watchedOrderDetails.some(formDetail => formDetail.ConsigneeId === detail.ConsigneeId)}
+                            onChange={(event) => {
+                              if (event.target.checked) {
+                                // OrderDetailから送付先とその他の詳細情報を取得
+                                const consignee = consignees.find(c => c.ConsigneeId === detail.ConsigneeId)
+                                const product = products.find(p => p.ProductId === detail.ProductId)
+                                
+                                if (consignee) {
+                                  const newDetail: OrderDetailForm = {
+                                    id: generateDetailId(),
+                                    ConsigneeId: detail.ConsigneeId,
+                                    Consignee: consignee,
+                                    ProductId: detail.ProductId,
+                                    Product: product,
+                                    Quantity: detail.Quantity,
+                                    UnitPrice: detail.UnitPrice,
+                                    TotalAmount: detail.LineTotal,
+                                  }
+                                  addOrderDetail(consignee, newDetail)
+                                }
+                              } else {
+                                // 該当する明細を削除
+                                const detailToRemove = watchedOrderDetails.find(formDetail => formDetail.ConsigneeId === detail.ConsigneeId)
+                                if (detailToRemove) {
+                                  removeOrderDetail(detailToRemove.id)
+                                }
                               }
-                            }
-                          }}
-                          disabled={!order.Consignee}
-                        />
-                      </TableCell>
-                      <TableCell>{dayjs(order.OrderDate).format('YYYY/MM/DD')}</TableCell>
-                      <TableCell>{order.ConsigneeName || '-'}</TableCell>
-                      <TableCell>{order.ProductName || '-'}</TableCell>
-                      <TableCell>{order.Quantity}</TableCell>
-                      <TableCell>¥{order.TotalAmount?.toLocaleString() || 0}</TableCell>
-                    </TableRow>
-                  ))}
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell>{`${order.OrderId}-${detailIndex + 1}`}</TableCell>
+                        <TableCell>{dayjs(order.OrderDate).format('YYYY/MM/DD')}</TableCell>
+                        <TableCell>{detail.ConsigneeName || '-'}</TableCell>
+                        <TableCell>{detail.ProductName || '-'}</TableCell>
+                        <TableCell>{detail.Quantity}</TableCell>
+                        <TableCell>¥{detail.LineTotal?.toLocaleString() || 0}</TableCell>
+                      </TableRow>
+                    )) || []
+                  ).flat()}
                 </TableBody>
               </Table>
             </TableContainer>

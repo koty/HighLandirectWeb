@@ -165,9 +165,19 @@ router.get('/api/orders', async (request, env) => {
   const url = new URL(request.url)
   const page = parseInt(url.searchParams.get('page') || '1')
   const limit = parseInt(url.searchParams.get('limit') || '10')
+  const shipperId = url.searchParams.get('shipperId')
   const offset = (page - 1) * limit
   
   try {
+    // クエリパラメータとバインド値を準備
+    const params = []
+    let whereClause = ''
+    
+    if (shipperId) {
+      whereClause = 'WHERE o.ShipperId = ?'
+      params.push(Number(shipperId))
+    }
+
     // 注文ヘッダー一覧を取得
     const ordersQuery = `
       SELECT 
@@ -186,11 +196,13 @@ router.get('/api/orders', async (request, env) => {
       LEFT JOIN Shipper s ON o.ShipperId = s.ShipperId
       LEFT JOIN Address sa ON s.AddressId = sa.AddressId
       LEFT JOIN Store st ON o.StoreId = st.StoreId
+      ${whereClause}
       ORDER BY o.OrderDate DESC
       LIMIT ? OFFSET ?
     `
 
-    const { results: orders } = await env.DB.prepare(ordersQuery).bind(limit, offset).all()
+    params.push(limit, offset)
+    const { results: orders } = await env.DB.prepare(ordersQuery).bind(...params).all()
     
     // 各注文の明細を取得
     const ordersWithDetails = await Promise.all(
@@ -225,7 +237,15 @@ router.get('/api/orders', async (request, env) => {
     )
 
     // 総件数取得
-    const countResult = await env.DB.prepare('SELECT COUNT(*) as total FROM "Order"').first()
+    let countQuery = 'SELECT COUNT(*) as total FROM "Order"'
+    const countParams = []
+    
+    if (shipperId) {
+      countQuery += ' WHERE ShipperId = ?'
+      countParams.push(Number(shipperId))
+    }
+    
+    const countResult = await env.DB.prepare(countQuery).bind(...countParams).first()
     const total = countResult.total || 0
     
     return new Response(JSON.stringify({

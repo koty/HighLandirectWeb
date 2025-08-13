@@ -20,7 +20,17 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     
     const page = parseInt(url.searchParams.get('page') || '1')
     const limit = parseInt(url.searchParams.get('limit') || '10')
+    const shipperId = url.searchParams.get('shipperId')
     const offset = (page - 1) * limit
+
+    // クエリパラメータとバインド値を準備
+    const params: (string | number)[] = []
+    let whereClause = ''
+    
+    if (shipperId) {
+      whereClause = 'WHERE o.ShipperId = ?'
+      params.push(Number(shipperId))
+    }
 
     // 注文ヘッダー一覧を取得
     const ordersQuery = `
@@ -40,11 +50,13 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       LEFT JOIN Shipper s ON o.ShipperId = s.ShipperId
       LEFT JOIN Address sa ON s.AddressId = sa.AddressId
       LEFT JOIN Store st ON o.StoreId = st.StoreId
+      ${whereClause}
       ORDER BY o.OrderDate DESC
       LIMIT ? OFFSET ?
     `
 
-    const ordersResult = await env.DB.prepare(ordersQuery).bind(limit, offset).all()
+    params.push(limit, offset)
+    const ordersResult = await env.DB.prepare(ordersQuery).bind(...params).all()
     const orders = ordersResult.results || []
 
     // 各注文の明細を取得
@@ -80,7 +92,15 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     )
 
     // 総件数取得
-    const countResult = await env.DB.prepare('SELECT COUNT(*) as total FROM "Order"').first()
+    let countQuery = 'SELECT COUNT(*) as total FROM "Order"'
+    const countParams: (string | number)[] = []
+    
+    if (shipperId) {
+      countQuery += ' WHERE ShipperId = ?'
+      countParams.push(Number(shipperId))
+    }
+    
+    const countResult = await env.DB.prepare(countQuery).bind(...countParams).first()
     const total = countResult.total || 0
 
     return new Response(
