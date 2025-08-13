@@ -343,7 +343,39 @@ MigrationTool.exe "MyData.sdf" "new.sqlite"
 - [x] Address + Shipper/Consigneeテーブル両方の更新処理
 - [x] 編集機能の包括的テスト実行・動作確認
 
-## 現在の状態（2025年8月12日時点）
+### Phase 16: Order モデルリファクタリング・正規化実装 ✅完了（2025年8月13日）
+- [x] データベーススキーマ設計変更（Order+OrderDetail分離）
+- [x] 既存Order単体テーブル → Order（ヘッダー）+ OrderDetail（明細）正規化構造
+- [x] TypeScript型定義完全更新（Order、OrderDetail、OrderDetailForm インターフェース）
+- [x] CloudFlare Pages Functions API完全再構築
+  - [x] GET /api/orders - Order+OrderDetail JOIN クエリ実装
+  - [x] POST /api/orders - トランザクション処理（Order作成 + 複数OrderDetail並行挿入）
+  - [x] PUT /api/orders/:id - 基本情報更新（OrderDate, TrackingNumber）
+  - [x] 集約値自動計算（OrderTotal, ItemCount）
+- [x] フロントエンド OrderList コンポーネント更新
+  - [x] 集約情報表示（OrderTotal, ItemCount, 送付先数）
+  - [x] 検索機能拡張（OrderDetail内のConsigneeName、ProductName対応）
+  - [x] MUI DataGrid `getRowId={(row) => row.OrderId}` 設定済み
+- [x] ローカル開発環境（worker-local.js）完全対応
+  - [x] Order+OrderDetail構造の全API実装
+  - [x] JOIN クエリ・トランザクション処理・集約計算
+- [x] 包括的テスト・動作確認
+  - [x] ローカル環境：新規Order作成・編集・表示の全機能テスト完了
+  - [x] 本番環境：データベーススキーマ移行・データ復旧完了
+  - [x] 既存3件のOrder → 新Order+OrderDetail構造へ無損失移行
+- [x] 本番環境データベース移行作業（2025年8月13日実施）
+  - [x] 既存Order テーブル → Order_backup へリネーム
+  - [x] 新Order テーブル作成（正規化スキーマ）
+  - [x] 既存データ → 新Order+OrderDetail構造へ移行
+  - [x] OrderDetail外部キー制約修正（Order_backup → Order参照エラー解決）
+  - [x] 5件のOrderDetail レコード作成・データ整合性確保
+  - [x] パフォーマンスインデックス作成・トリガー設定
+- [x] MUI DataGrid エラー解決
+  - [x] OrderDetail データ欠損問題の特定・解決
+  - [x] production API で全Order に OrderDetails が正常表示
+  - [x] https://highlandirectweb.pages.dev/orders 正常動作確認
+
+## 現在の状態（2025年8月13日時点）
 
 ### 🚀 本番稼働中
 - **Live URL**: https://highlandirectweb.pages.dev/
@@ -352,12 +384,14 @@ MigrationTool.exe "MyData.sdf" "new.sqlite"
 ### ✅ 完全実装済み機能
 1. **CloudFlare D1データベース**: 本番運用中
    - データベース: `highlandirect-db` 
-   - スキーマ: 8テーブル（Address, Shipper, Consignee, ProductMaster, Store, Order, OrderHistory, ReportMemo）
-   - 初期データ: 3件の注文 + 関連データ
+   - スキーマ: 8テーブル（Address, Shipper, Consignee, ProductMaster, Store, Order, OrderDetail, ReportMemo）
+   - 正規化構造: Order（ヘッダー）+ OrderDetail（明細）分離済み
+   - 初期データ: 5件の注文（Order）+ 対応OrderDetail + 関連データ
 
 2. **フルスタックAPI**: CloudFlare Pages Functions（TypeScript完全移行済み）
    - `/api/health` - ヘルスチェック
-   - `/api/orders` - 注文管理（GET/POST、ページネーション、フィルタリング）
+   - `/api/orders` - 注文管理（GET/POST、Order+OrderDetail構造、集約計算、ページネーション、フィルタリング）
+   - `/api/orders/:id` - 個別注文操作（GET/PUT、OrderDetail込み取得・基本情報更新）
    - `/api/shippers` - 荷主管理（GET/POST、Address JOIN、検索機能）
    - `/api/shippers/:id` - 荷主個別操作（GET/PUT、編集機能対応）
    - `/api/consignees` - 送付先管理（GET/POST、Address JOIN、検索機能）
@@ -368,8 +402,10 @@ MigrationTool.exe "MyData.sdf" "new.sqlite"
    - CORS対応、エラーハンドリング完備、型安全保証
 
 3. **React フロントエンド**: 
-   - **注文管理**: D1データベース連携完了（リアルタイムCRUD、高度な注文作成フォーム）
+   - **注文管理**: Order+OrderDetail 正規化構造対応完了（リアルタイムCRUD、高度な注文作成フォーム）
+   - **注文一覧（OrderList）**: 集約情報表示（OrderTotal, ItemCount, 送付先数）、OrderDetail横断検索
    - **注文作成フォーム**: Shipper/Consignee/Product選択、複数明細対応、荷主履歴連携
+   - **注文編集**: 個別Order取得・基本情報更新（OrderDate, TrackingNumber）
    - **荷主管理**: API連携完了（検索・ページネーション・リアルタイム更新・編集機能）
    - **送付先管理**: API連携完了（検索・ページネーション・リアルタイム更新・編集機能）
    - **商品管理**: API連携完了（果物商品対応、検索・ページネーション・リアルタイム更新）
@@ -385,20 +421,25 @@ MigrationTool.exe "MyData.sdf" "new.sqlite"
    - **ローカル開発環境**: フルスタック対応（フロントエンド + API + SQLite）
    - **コード品質管理**: TypeScript strict mode、ESLint（セキュリティプラグイン含む）、自動型チェック
 
-### 📊 実際のデータベースデータ
-- **ORD-2024-001**: 東京商事株式会社 → 山田太郎（りんご 5kg、¥2,500、完了）
-- **ORD-2024-002**: 大阪工業株式会社 → 大阪工業株式会社（桃 10kg × 2、¥13,000、受付）
-- **ORD-2024-003**: 名古屋商会 → 山田太郎（桃 5kg、¥3,500、完了）
+### 📊 実際のデータベースデータ（Order+OrderDetail構造）
+- **Order #1**: 東京商事株式会社（2024-01-15、総額¥930、1点）
+  - OrderDetail: 山田太郎 → 宅急便60サイズ × 1点（¥930）
+- **Order #2**: 大阪工業株式会社（2024-01-16、総額¥3,300、2点）  
+  - OrderDetail: 大阪工業株式会社 → クール宅急便 × 2点（¥3,300）
+- **Order #3**: 名古屋商会（2024-01-17、総額¥1,500、1点）
+  - OrderDetail: 山田太郎 → 宅急便100サイズ × 1点（¥1,500）
+- **Order #4-5**: テスト注文（2024-01-20、各¥930、各1点）
+  - OrderDetail: 山田太郎 → 宅急便60サイズ × 1点（各¥930）
 
 ### 🔄 API動作確認
 ```bash
 # 注文一覧取得（実際のD1データ）
 curl "https://highlandirectweb.pages.dev/api/orders?page=1&limit=10"
 
-# 新規注文作成（D1データベースに永続化）
+# 新規注文作成（Order+OrderDetail構造、D1データベースに永続化）
 curl -X POST https://highlandirectweb.pages.dev/api/orders \
   -H "Content-Type: application/json" \
-  -d '{"ShipperName":"テスト荷主","ConsigneeName":"テスト送付先"}'
+  -d '{"OrderDate":"2024-01-20","ShipperId":1,"StoreId":1,"OrderDetails":[{"ConsigneeId":1,"ProductId":1,"Quantity":1,"UnitPrice":930}]}'
 
 # 荷主個別取得・更新（編集機能）
 curl "https://highlandirectweb.pages.dev/api/shippers/1"  # 個別取得
@@ -514,16 +555,17 @@ git push origin main  # 自動デプロイ → CloudFlare Pages
 - [x] **住所入力フォーム統合**: 郵便番号検索をフロントエンドに統合（7桁自動検索、手動検索ボタン、エラーハンドリング、住所自動入力完了）
 - [x] **荷主・送付先編集機能実装**: 個別取得・更新API、編集フォーム対応、キャッシュ管理完了
 - [x] **注文編集機能実装**: 個別注文取得・更新API、編集画面の空表示問題解決完了
-- [x] **Orderモデルのリファクタリング**: OrderモデルをOrderとOrderDetailに分離（80%完了）
+- [x] **Orderモデルのリファクタリング**: OrderモデルをOrderとOrderDetailに分離完了（100%完了）
   - [x] データベーススキーマ再設計（Order+OrderDetailテーブル、OrderHistory削除）
   - [x] 正規化されたサンプルデータ作成・投入
   - [x] TypeScript型定義更新（Order、OrderDetail、OrderDetailForm）
   - [x] CloudFlare Pages Functions API再構築（ネスト構造、トランザクション処理）
   - [x] OrderForm.tsx基本修正（型定義、編集モード対応）
-  - [ ] **残作業**: ローカルワーカーAPI完全更新（worker-local.js Order部分）
-  - [ ] **残作業**: OrderList表示調整（集約情報表示、新API構造対応）
-  - [ ] **残作業**: 包括的動作テスト（新規作成・編集・表示の全機能）
-  - [ ] **残作業**: 本番環境デプロイ・動作確認
+  - [x] ローカルワーカーAPI完全更新（worker-local.js Order部分）
+  - [x] OrderList表示調整（集約情報表示、新API構造対応）
+  - [x] 包括的動作テスト（新規作成・編集・表示の全機能）
+  - [x] 本番環境デプロイ・動作確認（2025年8月13日完了）
+  - [x] MUI DataGridエラー解決（OrderDetail外部キー制約修正、production データ復旧）
 - [ ] 従前WPFシステムからの移行処理作成
 
 ### 🎯 中優先度（Future Features）
