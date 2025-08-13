@@ -72,6 +72,8 @@ export interface Order {
   TrackingNumber?: string;
   CreatedAt: string;
   UpdatedAt: string;
+  ShipperName?: string; // API レスポンスから取得
+  StoreName?: string;   // API レスポンスから取得
   Shipper?: Shipper;
   Store?: Store;
   OrderDetails?: OrderDetail[];
@@ -87,6 +89,8 @@ export interface OrderDetail {
   LineTotal: number;
   CreatedAt: string;
   UpdatedAt: string;
+  ConsigneeName?: string; // API レスポンスから取得
+  ProductName?: string;   // API レスポンスから取得
   Consignee?: Consignee;
   Product?: Product;
 }

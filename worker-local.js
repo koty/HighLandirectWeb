@@ -160,95 +160,77 @@ router.post('/api/shippers', async (request, env) => {
   }
 })
 
-// Orders API
+// Orders API - Updated for Order + OrderDetail structure
 router.get('/api/orders', async (request, env) => {
   const url = new URL(request.url)
   const page = parseInt(url.searchParams.get('page') || '1')
   const limit = parseInt(url.searchParams.get('limit') || '10')
-  const search = url.searchParams.get('search')
-  // status parameter removed as OrderStatus column was deleted
-  const shipperId = url.searchParams.get('shipperId')
-  
-  let query = `
-    SELECT 
-      o.OrderId,
-      o.OrderDate,
-      o.ShipperId,
-      o.ConsigneeId,
-      o.ProductId,
-      o.StoreId,
-      o.Quantity,
-      o.UnitPrice,
-      o.TotalAmount,
-      o.TrackingNumber,
-      o.CreatedAt,
-      o.UpdatedAt,
-      sa.Name as ShipperName,
-      ca.Name as ConsigneeName,
-      p.ProductName,
-      st.StoreName
-    FROM "Order" o
-    LEFT JOIN Shipper s ON o.ShipperId = s.ShipperId
-    LEFT JOIN Address sa ON s.AddressId = sa.AddressId
-    LEFT JOIN Consignee c ON o.ConsigneeId = c.ConsigneeId  
-    LEFT JOIN Address ca ON c.AddressId = ca.AddressId
-    LEFT JOIN ProductMaster p ON o.ProductId = p.ProductId
-    LEFT JOIN Store st ON o.StoreId = st.StoreId
-    WHERE 1=1
-  `
-  
-  const params = []
-  
-  if (search) {
-    query += ` AND (sa.Name LIKE ? OR ca.Name LIKE ?)`
-    const searchTerm = `%${search}%`
-    params.push(searchTerm, searchTerm)
-  }
-  
-  if (shipperId) {
-    query += ` AND o.ShipperId = ?`
-    params.push(parseInt(shipperId))
-  }
-  
-  query += ` ORDER BY o.CreatedAt DESC`
-  
   const offset = (page - 1) * limit
-  query += ` LIMIT ? OFFSET ?`
-  params.push(limit, offset)
   
   try {
-    const { results } = await env.DB.prepare(query).bind(...params).all()
-    
-    // Count total records
-    let countQuery = `
-      SELECT COUNT(*) as total
+    // 注文ヘッダー一覧を取得
+    const ordersQuery = `
+      SELECT 
+        o.OrderId,
+        o.OrderDate,
+        o.ShipperId,
+        o.StoreId,
+        o.OrderTotal,
+        o.ItemCount,
+        o.TrackingNumber,
+        o.CreatedAt,
+        o.UpdatedAt,
+        sa.Name as ShipperName,
+        st.StoreName
       FROM "Order" o
       LEFT JOIN Shipper s ON o.ShipperId = s.ShipperId
       LEFT JOIN Address sa ON s.AddressId = sa.AddressId
-      LEFT JOIN Consignee c ON o.ConsigneeId = c.ConsigneeId
-      LEFT JOIN Address ca ON c.AddressId = ca.AddressId
-      WHERE 1=1
+      LEFT JOIN Store st ON o.StoreId = st.StoreId
+      ORDER BY o.OrderDate DESC
+      LIMIT ? OFFSET ?
     `
+
+    const { results: orders } = await env.DB.prepare(ordersQuery).bind(limit, offset).all()
     
-    const countParams = []
-    
-    if (search) {
-      countQuery += ` AND (sa.Name LIKE ? OR ca.Name LIKE ?)`
-      const searchTerm = `%${search}%`
-      countParams.push(searchTerm, searchTerm)
-    }
-    
-    if (shipperId) {
-      countQuery += ` AND o.ShipperId = ?`
-      countParams.push(parseInt(shipperId))
-    }
-    
-    const countResult = await env.DB.prepare(countQuery).bind(...countParams).first()
-    const total = countResult?.total || 0
+    // 各注文の明細を取得
+    const ordersWithDetails = await Promise.all(
+      orders.map(async (order) => {
+        const detailsQuery = `
+          SELECT 
+            od.OrderDetailId,
+            od.OrderId,
+            od.ConsigneeId,
+            od.ProductId,
+            od.Quantity,
+            od.UnitPrice,
+            od.LineTotal,
+            od.CreatedAt,
+            od.UpdatedAt,
+            ca.Name as ConsigneeName,
+            pm.ProductName
+          FROM OrderDetail od
+          LEFT JOIN Consignee c ON od.ConsigneeId = c.ConsigneeId
+          LEFT JOIN Address ca ON c.AddressId = ca.AddressId
+          LEFT JOIN ProductMaster pm ON od.ProductId = pm.ProductId
+          WHERE od.OrderId = ?
+        `
+        
+        const { results: details } = await env.DB.prepare(detailsQuery).bind(order.OrderId).all()
+        
+        return {
+          ...order,
+          OrderDetails: details || []
+        }
+      })
+    )
+
+    // 総件数取得
+    const countResult = await env.DB.prepare('SELECT COUNT(*) as total FROM "Order"').first()
+    const total = countResult.total || 0
     
     return new Response(JSON.stringify({
       success: true,
-      data: results || [],
+      data: ordersWithDetails,
       pagination: {
         page,
         limit,
@@ -259,6 +241,7 @@ router.get('/api/orders', async (request, env) => {
       headers: { 'Content-Type': 'application/json', ...CORS_HEADERS }
     })
   } catch (error) {
+    console.error('Get orders error:', error)
     return new Response(JSON.stringify({
       success: false,
       error: error.message
@@ -273,34 +256,96 @@ router.post('/api/orders', async (request, env) => {
   const data = await request.json()
   
   try {
-    const query = `
+    // バリデーション
+    if (!data.OrderDate || !data.ShipperId || !data.StoreId || !data.OrderDetails || !Array.isArray(data.OrderDetails)) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'Missing required fields: OrderDate, ShipperId, StoreId, OrderDetails'
+      }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', ...CORS_HEADERS }
+      })
+    }
+
+    if (data.OrderDetails.length === 0) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'At least one order detail is required'
+      }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', ...CORS_HEADERS }
+      })
+    }
+
+    // 注文合計計算
+    let orderTotal = 0
+    let itemCount = 0
+    for (const detail of data.OrderDetails) {
+      const lineTotal = (detail.Quantity || 0) * (detail.UnitPrice || 0)
+      orderTotal += lineTotal
+      itemCount += detail.Quantity || 0
+    }
+
+    // 注文ヘッダー作成
+    const orderQuery = `
       INSERT INTO "Order" (
-        OrderDate, ShipperId, ConsigneeId, ProductId, StoreId,
-        Quantity, UnitPrice, TotalAmount
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        OrderDate, ShipperId, StoreId, OrderTotal, ItemCount
+      ) VALUES (?, ?, ?, ?, ?)
     `
-    
-    const result = await env.DB.prepare(query).bind(
-      data.OrderDate || new Date().toISOString().split('T')[0],
-      data.ShipperId,
-      data.ConsigneeId,
-      data.ProductId,
-      data.StoreId,
-      data.Quantity || 1,
-      data.UnitPrice || 0,
-      data.TotalAmount || 0
-    ).run()
+
+    const orderResult = await env.DB.prepare(orderQuery)
+      .bind(data.OrderDate, data.ShipperId, data.StoreId, orderTotal, itemCount)
+      .run()
+
+    const orderId = orderResult.meta.last_row_id
+
+    // 注文明細作成（並行処理）
+    const detailPromises = data.OrderDetails.map((detail) => {
+      const lineTotal = (detail.Quantity || 0) * (detail.UnitPrice || 0)
+      const detailQuery = `
+        INSERT INTO OrderDetail (
+          OrderId, ConsigneeId, ProductId, Quantity, UnitPrice, LineTotal
+        ) VALUES (?, ?, ?, ?, ?, ?)
+      `
+      return env.DB.prepare(detailQuery)
+        .bind(orderId, detail.ConsigneeId, detail.ProductId, detail.Quantity, detail.UnitPrice, lineTotal)
+        .run()
+    })
+
+    await Promise.all(detailPromises)
+
+    // 作成された注文を取得して返す
+    const createdOrderQuery = `
+      SELECT 
+        o.OrderId,
+        o.OrderDate,
+        o.ShipperId,
+        o.StoreId,
+        o.OrderTotal,
+        o.ItemCount,
+        o.TrackingNumber,
+        o.CreatedAt,
+        o.UpdatedAt,
+        sa.Name as ShipperName,
+        st.StoreName
+      FROM "Order" o
+      LEFT JOIN Shipper s ON o.ShipperId = s.ShipperId
+      LEFT JOIN Address sa ON s.AddressId = sa.AddressId
+      LEFT JOIN Store st ON o.StoreId = st.StoreId
+      WHERE o.OrderId = ?
+    `
+
+    const createdOrder = await env.DB.prepare(createdOrderQuery).bind(orderId).first()
     
     return new Response(JSON.stringify({
       success: true,
-      data: {
-        OrderId: result.meta.last_row_id,
-        ...data
-      }
+      data: createdOrder
     }), {
+      status: 201,
       headers: { 'Content-Type': 'application/json', ...CORS_HEADERS }
     })
   } catch (error) {
+    console.error('Create order error:', error)
     return new Response(JSON.stringify({
       success: false,
       error: error.message
@@ -311,42 +356,35 @@ router.post('/api/orders', async (request, env) => {
   }
 })
 
-// Individual order routes
+// Individual order routes - Updated for Order + OrderDetail structure
 router.get('/api/orders/:id', async (request, env) => {
   const { id } = request.params
   
   try {
-    const query = `
+    // 注文ヘッダー取得
+    const orderQuery = `
       SELECT 
         o.OrderId,
         o.OrderDate,
         o.ShipperId,
-        o.ConsigneeId,
-        o.ProductId,
         o.StoreId,
-        o.Quantity,
-        o.UnitPrice,
-        o.TotalAmount,
+        o.OrderTotal,
+        o.ItemCount,
         o.TrackingNumber,
         o.CreatedAt,
         o.UpdatedAt,
         sa.Name as ShipperName,
-        ca.Name as ConsigneeName,
-        pm.ProductName,
         st.StoreName
       FROM "Order" o
       LEFT JOIN Shipper s ON o.ShipperId = s.ShipperId
       LEFT JOIN Address sa ON s.AddressId = sa.AddressId
-      LEFT JOIN Consignee c ON o.ConsigneeId = c.ConsigneeId
-      LEFT JOIN Address ca ON c.AddressId = ca.AddressId
-      LEFT JOIN ProductMaster pm ON o.ProductId = pm.ProductId
       LEFT JOIN Store st ON o.StoreId = st.StoreId
       WHERE o.OrderId = ?
     `
     
-    const result = await env.DB.prepare(query).bind(id).first()
+    const order = await env.DB.prepare(orderQuery).bind(id).first()
     
-    if (!result) {
+    if (!order) {
       return new Response(JSON.stringify({
         success: false,
         error: 'Order not found'
@@ -355,14 +393,41 @@ router.get('/api/orders/:id', async (request, env) => {
         headers: { 'Content-Type': 'application/json', ...CORS_HEADERS }
       })
     }
+
+    // 注文明細取得
+    const detailsQuery = `
+      SELECT 
+        od.OrderDetailId,
+        od.OrderId,
+        od.ConsigneeId,
+        od.ProductId,
+        od.Quantity,
+        od.UnitPrice,
+        od.LineTotal,
+        od.CreatedAt,
+        od.UpdatedAt,
+        ca.Name as ConsigneeName,
+        pm.ProductName
+      FROM OrderDetail od
+      LEFT JOIN Consignee c ON od.ConsigneeId = c.ConsigneeId
+      LEFT JOIN Address ca ON c.AddressId = ca.AddressId
+      LEFT JOIN ProductMaster pm ON od.ProductId = pm.ProductId
+      WHERE od.OrderId = ?
+    `
+    
+    const { results: details } = await env.DB.prepare(detailsQuery).bind(id).all()
     
     return new Response(JSON.stringify({
       success: true,
-      data: result
+      data: {
+        ...order,
+        OrderDetails: details || []
+      }
     }), {
       headers: { 'Content-Type': 'application/json', ...CORS_HEADERS }
     })
   } catch (error) {
+    console.error('Get order by id error:', error)
     return new Response(JSON.stringify({
       success: false,
       error: error.message
@@ -373,52 +438,57 @@ router.get('/api/orders/:id', async (request, env) => {
   }
 })
 
-// Update order
+// Update order - Simplified to match production (OrderDate, TrackingNumber only)
 router.put('/api/orders/:id', async (request, env) => {
   const { id } = request.params
   
   try {
-    const data = await request.json()
-    
-    // バリデーション
-    if (!data.ShipperId || !data.ConsigneeId || !data.ProductId || !data.StoreId) {
+    if (!id || isNaN(Number(id))) {
       return new Response(JSON.stringify({
         success: false,
-        error: 'Missing required fields'
+        error: 'Invalid order ID'
       }), {
         status: 400,
         headers: { 'Content-Type': 'application/json', ...CORS_HEADERS }
       })
     }
 
+    const data = await request.json()
+
+    // 注文ヘッダーの基本情報のみ更新可能（OrderDate, TrackingNumber）
+    // 明細情報は別途明細管理APIで対応する設計
+    const allowedFields = ['OrderDate', 'TrackingNumber']
+    const updates = []
+    const values = []
+    
+    allowedFields.forEach(field => {
+      if (data[field] !== undefined) {
+        updates.push(`${field} = ?`)
+        values.push(data[field])
+      }
+    })
+    
+    if (updates.length === 0) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'No valid fields to update'
+      }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', ...CORS_HEADERS }
+      })
+    }
+
+    // UpdatedAtを追加
+    updates.push('UpdatedAt = datetime(\'now\')')
+    values.push(Number(id))
+
     const updateQuery = `
       UPDATE "Order"
-      SET 
-        OrderDate = ?,
-        ShipperId = ?,
-        ConsigneeId = ?,
-        ProductId = ?,
-        StoreId = ?,
-        Quantity = ?,
-        UnitPrice = ?,
-        TotalAmount = ?,
-        UpdatedAt = datetime('now')
+      SET ${updates.join(', ')}
       WHERE OrderId = ?
     `
 
-    const result = await env.DB.prepare(updateQuery)
-      .bind(
-        data.OrderDate,
-        data.ShipperId,
-        data.ConsigneeId,
-        data.ProductId,
-        data.StoreId,
-        data.Quantity || 1,
-        data.UnitPrice || 0,
-        data.TotalAmount || 0,
-        id
-      )
-      .run()
+    const result = await env.DB.prepare(updateQuery).bind(...values).run()
 
     if (result.changes === 0) {
       return new Response(JSON.stringify({
@@ -430,40 +500,42 @@ router.put('/api/orders/:id', async (request, env) => {
       })
     }
 
-    // 更新後のデータを取得
-    const getQuery = `
+    // 更新された注文を取得（明細込み）
+    const getOrderQuery = `
       SELECT 
-        o.OrderId,
-        o.OrderDate,
-        o.ShipperId,
-        o.ConsigneeId,
-        o.ProductId,
-        o.StoreId,
-        o.Quantity,
-        o.UnitPrice,
-        o.TotalAmount,
-        o.TrackingNumber,
-        o.CreatedAt,
-        o.UpdatedAt,
-        sa.Name as ShipperName,
-        ca.Name as ConsigneeName,
-        pm.ProductName,
-        st.StoreName
+        o.OrderId, o.OrderDate, o.ShipperId, o.StoreId,
+        o.OrderTotal, o.ItemCount, o.TrackingNumber, o.CreatedAt, o.UpdatedAt,
+        sa.Name as ShipperName, st.StoreName
       FROM "Order" o
       LEFT JOIN Shipper s ON o.ShipperId = s.ShipperId
       LEFT JOIN Address sa ON s.AddressId = sa.AddressId
-      LEFT JOIN Consignee c ON o.ConsigneeId = c.ConsigneeId
-      LEFT JOIN Address ca ON c.AddressId = ca.AddressId
-      LEFT JOIN ProductMaster pm ON o.ProductId = pm.ProductId
       LEFT JOIN Store st ON o.StoreId = st.StoreId
       WHERE o.OrderId = ?
     `
 
-    const updatedOrder = await env.DB.prepare(getQuery).bind(id).first()
+    const updatedOrder = await env.DB.prepare(getOrderQuery).bind(Number(id)).first()
+
+    // 注文明細も取得
+    const detailsQuery = `
+      SELECT 
+        od.OrderDetailId, od.OrderId, od.ConsigneeId, od.ProductId,
+        od.Quantity, od.UnitPrice, od.LineTotal, od.CreatedAt, od.UpdatedAt,
+        ca.Name as ConsigneeName, pm.ProductName
+      FROM OrderDetail od
+      LEFT JOIN Consignee c ON od.ConsigneeId = c.ConsigneeId
+      LEFT JOIN Address ca ON c.AddressId = ca.AddressId
+      LEFT JOIN ProductMaster pm ON od.ProductId = pm.ProductId
+      WHERE od.OrderId = ?
+    `
+    
+    const { results: details } = await env.DB.prepare(detailsQuery).bind(Number(id)).all()
 
     return new Response(JSON.stringify({
       success: true,
-      data: updatedOrder
+      data: {
+        ...updatedOrder,
+        OrderDetails: details || []
+      }
     }), {
       headers: { 'Content-Type': 'application/json', ...CORS_HEADERS }
     })

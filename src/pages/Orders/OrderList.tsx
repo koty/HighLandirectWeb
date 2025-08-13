@@ -85,7 +85,10 @@ const OrderList: React.FC = () => {
   const filteredOrders = orders.filter((order) => {
     const matchesSearch = searchTerm === '' || 
       order.ShipperName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.ConsigneeName?.toLowerCase().includes(searchTerm.toLowerCase())
+      order.OrderDetails?.some(detail => 
+        detail.ConsigneeName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        detail.ProductName?.toLowerCase().includes(searchTerm.toLowerCase())
+      )
     
     return matchesSearch
   })
@@ -103,15 +106,26 @@ const OrderList: React.FC = () => {
       width: 200,
     },
     {
-      field: 'ConsigneeName',
-      headerName: '送付先',
-      width: 200,
-    },
-    {
-      field: 'TotalAmount',
-      headerName: '金額',
+      field: 'OrderTotal',
+      headerName: '総額',
       width: 100,
       valueFormatter: (params) => `¥${params.value?.toLocaleString() || 0}`,
+    },
+    {
+      field: 'ItemCount',
+      headerName: '商品数',
+      width: 80,
+      valueFormatter: (params) => `${params.value || 0}点`,
+    },
+    {
+      field: 'ConsigneeCount',
+      headerName: '送付先数',
+      width: 100,
+      valueGetter: (params) => {
+        const order = params.row as Order
+        return order.OrderDetails?.length || 0
+      },
+      valueFormatter: (params) => `${params.value}件`,
     },
     {
       field: 'TrackingNumber',
