@@ -512,7 +512,18 @@ git push origin main  # 自動デプロイ → CloudFlare Pages
 - [x] **ローカル開発環境構築**: フルスタック開発環境（SQLite連携）完了
 - [x] **注文作成フォーム改善**: 実際のShipper/Consignee/Product選択機能（ドロップダウン連携）完了
 - [x] **住所入力フォーム統合**: 郵便番号検索をフロントエンドに統合（7桁自動検索、手動検索ボタン、エラーハンドリング、住所自動入力完了）
-- [ ] **Orderモデルのリファクタリング**: OrderモデルをOrderとOrderDetailに分離する
+- [x] **荷主・送付先編集機能実装**: 個別取得・更新API、編集フォーム対応、キャッシュ管理完了
+- [x] **注文編集機能実装**: 個別注文取得・更新API、編集画面の空表示問題解決完了
+- [x] **Orderモデルのリファクタリング**: OrderモデルをOrderとOrderDetailに分離（80%完了）
+  - [x] データベーススキーマ再設計（Order+OrderDetailテーブル、OrderHistory削除）
+  - [x] 正規化されたサンプルデータ作成・投入
+  - [x] TypeScript型定義更新（Order、OrderDetail、OrderDetailForm）
+  - [x] CloudFlare Pages Functions API再構築（ネスト構造、トランザクション処理）
+  - [x] OrderForm.tsx基本修正（型定義、編集モード対応）
+  - [ ] **残作業**: ローカルワーカーAPI完全更新（worker-local.js Order部分）
+  - [ ] **残作業**: OrderList表示調整（集約情報表示、新API構造対応）
+  - [ ] **残作業**: 包括的動作テスト（新規作成・編集・表示の全機能）
+  - [ ] **残作業**: 本番環境デプロイ・動作確認
 - [ ] 従前WPFシステムからの移行処理作成
 
 ### 🎯 中優先度（Future Features）
