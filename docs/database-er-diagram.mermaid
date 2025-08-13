@@ -1,0 +1,126 @@
+erDiagram
+    %% HighLandirect Web版 データベース ER図 (Order+OrderDetail正規化済み)
+    
+    Address {
+        int AddressId PK
+        text Name "NOT NULL"
+        text Furigana
+        text Keisho
+        text PostalCD
+        text PrefectureCD
+        text PrefectureName
+        text RegionCD
+        text RegionName
+        text CityName
+        text Address1
+        text Address2
+        text Address3
+        text Address4
+        text Phone
+        text Phone2
+        text Fax
+        text MailAddress
+        text Memo
+        datetime CreatedAt
+        datetime UpdatedAt
+        int IsActive "DEFAULT 1"
+    }
+
+    Shipper {
+        int ShipperId PK
+        int AddressId FK
+        text ShipperCode UK
+        text ShipperType
+        datetime ContractStartDate
+        datetime ContractEndDate
+        real CreditLimit
+        text PaymentTerms
+        int IsActive "DEFAULT 1"
+        datetime CreatedAt
+        datetime UpdatedAt
+    }
+
+    Consignee {
+        int ConsigneeId PK
+        int AddressId FK
+        text ConsigneeCode UK
+        text DeliveryInstructions
+        text AccessInfo
+        text PreferredDeliveryTime
+        text SpecialHandling
+        int IsActive "DEFAULT 1"
+        datetime CreatedAt
+        datetime UpdatedAt
+    }
+
+    ProductMaster {
+        int ProductId PK
+        text ProductCode UK
+        text ProductName "NOT NULL"
+        text ProductCategory
+        real UnitPrice "NOT NULL"
+        real TaxRate "DEFAULT 0.1"
+        real Weight
+        text Dimensions
+        int IsFragile "DEFAULT 0"
+        int IsDefault "DEFAULT 0"
+        int IsActive "DEFAULT 1"
+        datetime CreatedAt
+        datetime UpdatedAt
+    }
+
+    Store {
+        int StoreId PK
+        text StoreCode UK
+        text StoreName
+        text CarrierCode
+        text CarrierName
+        text RegionCode
+        text ContactPhone
+        text ServiceArea
+        text CutoffTime
+        int IsDefault "DEFAULT 0"
+        int IsActive "DEFAULT 1"
+        datetime CreatedAt
+        datetime UpdatedAt
+    }
+
+    Order {
+        int OrderId PK
+        datetime OrderDate "NOT NULL"
+        int ShipperId FK
+        int StoreId FK
+        real OrderTotal "DEFAULT 0, 集約値"
+        int ItemCount "DEFAULT 0, 集約値"
+        text TrackingNumber
+        datetime CreatedAt
+        datetime UpdatedAt
+    }
+
+    OrderDetail {
+        int OrderDetailId PK
+        int OrderId FK
+        int ConsigneeId FK
+        int ProductId FK
+        int Quantity "NOT NULL, DEFAULT 1"
+        real UnitPrice "NOT NULL"
+        real LineTotal "NOT NULL, 計算値"
+        datetime CreatedAt
+        datetime UpdatedAt
+    }
+
+    ReportMemo {
+        int ReportMemoId PK
+        text MemoName
+        text MemoContent
+        int IsDefault "DEFAULT 0"
+    }
+
+    %% リレーションシップ定義
+    Address ||--o{ Shipper : "住所一元管理"
+    Address ||--o{ Consignee : "住所一元管理"
+    Shipper ||--o{ Order : "荷主-注文"
+    Store ||--o{ Order : "集配所-注文"
+    Order ||--o{ OrderDetail : "注文-明細(1対多)"
+    Consignee ||--o{ OrderDetail : "送付先-明細"
+    ProductMaster ||--o{ OrderDetail : "商品-明細"

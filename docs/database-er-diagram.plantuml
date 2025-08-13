@@ -1,0 +1,175 @@
+@startuml HighLandirect Database ER Diagram
+!define table(x) class x << (T,#FFAAAA) >>
+!define pk(x) <color:red><b>x</b></color>
+!define fk(x) <color:blue><u>x</u></color>
+!define unique(x) <color:green><i>x</i></color>
+
+title HighLandirect Web版 データベース ER図 (Order+OrderDetail正規化済み)
+
+table(Address) {
+  pk(AddressId) : INTEGER (PK)
+  --
+  Name : TEXT (NOT NULL)
+  Furigana : TEXT
+  Keisho : TEXT
+  PostalCD : TEXT
+  PrefectureCD : TEXT
+  PrefectureName : TEXT
+  RegionCD : TEXT
+  RegionName : TEXT
+  CityName : TEXT
+  Address1 : TEXT
+  Address2 : TEXT
+  Address3 : TEXT
+  Address4 : TEXT
+  Phone : TEXT
+  Phone2 : TEXT
+  Fax : TEXT
+  MailAddress : TEXT
+  Memo : TEXT
+  CreatedAt : DATETIME
+  UpdatedAt : DATETIME
+  IsActive : INTEGER (DEFAULT 1)
+}
+
+table(Shipper) {
+  pk(ShipperId) : INTEGER (PK)
+  --
+  fk(AddressId) : INTEGER (FK → Address)
+  ShipperCode : TEXT (UNIQUE)
+  ShipperType : TEXT
+  ContractStartDate : DATETIME
+  ContractEndDate : DATETIME
+  CreditLimit : REAL
+  PaymentTerms : TEXT
+  IsActive : INTEGER (DEFAULT 1)
+  CreatedAt : DATETIME
+  UpdatedAt : DATETIME
+}
+
+table(Consignee) {
+  pk(ConsigneeId) : INTEGER (PK)
+  --
+  fk(AddressId) : INTEGER (FK → Address)
+  ConsigneeCode : TEXT (UNIQUE)
+  DeliveryInstructions : TEXT
+  AccessInfo : TEXT
+  PreferredDeliveryTime : TEXT
+  SpecialHandling : TEXT
+  IsActive : INTEGER (DEFAULT 1)
+  CreatedAt : DATETIME
+  UpdatedAt : DATETIME
+}
+
+table(ProductMaster) {
+  pk(ProductId) : INTEGER (PK)
+  --
+  ProductCode : TEXT (UNIQUE)
+  ProductName : TEXT (NOT NULL)
+  ProductCategory : TEXT
+  UnitPrice : REAL (NOT NULL)
+  TaxRate : REAL (DEFAULT 0.1)
+  Weight : REAL
+  Dimensions : TEXT
+  IsFragile : INTEGER (DEFAULT 0)
+  IsDefault : INTEGER (DEFAULT 0)
+  IsActive : INTEGER (DEFAULT 1)
+  CreatedAt : DATETIME
+  UpdatedAt : DATETIME
+}
+
+table(Store) {
+  pk(StoreId) : INTEGER (PK)
+  --
+  StoreCode : TEXT (UNIQUE)
+  StoreName : TEXT
+  CarrierCode : TEXT
+  CarrierName : TEXT
+  RegionCode : TEXT
+  ContactPhone : TEXT
+  ServiceArea : TEXT
+  CutoffTime : TEXT
+  IsDefault : INTEGER (DEFAULT 0)
+  IsActive : INTEGER (DEFAULT 1)
+  CreatedAt : DATETIME
+  UpdatedAt : DATETIME
+}
+
+table(Order) {
+  pk(OrderId) : INTEGER (PK)
+  --
+  OrderDate : DATETIME (NOT NULL)
+  fk(ShipperId) : INTEGER (FK → Shipper)
+  fk(StoreId) : INTEGER (FK → Store)
+  OrderTotal : REAL (DEFAULT 0)
+  ItemCount : INTEGER (DEFAULT 0)
+  TrackingNumber : TEXT
+  CreatedAt : DATETIME
+  UpdatedAt : DATETIME
+}
+
+table(OrderDetail) {
+  pk(OrderDetailId) : INTEGER (PK)
+  --
+  fk(OrderId) : INTEGER (FK → Order)
+  fk(ConsigneeId) : INTEGER (FK → Consignee)
+  fk(ProductId) : INTEGER (FK → ProductMaster)
+  Quantity : INTEGER (NOT NULL, DEFAULT 1)
+  UnitPrice : REAL (NOT NULL)
+  LineTotal : REAL (NOT NULL)
+  CreatedAt : DATETIME
+  UpdatedAt : DATETIME
+}
+
+table(ReportMemo) {
+  pk(ReportMemoId) : INTEGER (PK)
+  --
+  MemoName : TEXT
+  MemoContent : TEXT
+  IsDefault : INTEGER (DEFAULT 0)
+}
+
+' リレーションシップ定義
+Address ||--o{ Shipper : "1対多\n(Address → Shipper)"
+Address ||--o{ Consignee : "1対多\n(Address → Consignee)"
+Shipper ||--o{ Order : "1対多\n(荷主 → 注文)"
+Store ||--o{ Order : "1対多\n(集配所 → 注文)"
+Order ||--o{ OrderDetail : "1対多\n(注文 → 注文明細)"
+Consignee ||--o{ OrderDetail : "1対多\n(送付先 → 注文明細)"
+ProductMaster ||--o{ OrderDetail : "1対多\n(商品 → 注文明細)"
+
+note right of Address
+  **住所マスタ（一元管理）**
+  - 荷主と送付先の住所情報を統一管理
+  - 郵便番号検索API対応
+  - ふりがな自動生成対応
+end note
+
+note right of Order
+  **注文ヘッダー（正規化済み）**
+  - OrderTotal, ItemCountは集約値
+  - 複数の注文明細を持つ
+  - 2025/8/13: 正規化リファクタリング完了
+end note
+
+note right of OrderDetail
+  **注文明細（正規化済み）**
+  - Order:OrderDetail = 1:多
+  - 各明細は個別の送付先・商品を持つ
+  - LineTotal = Quantity × UnitPrice
+end note
+
+note left of Shipper
+  **荷主マスタ**
+  - LatestSend条件でフィルタ
+  - Address JOIN で住所情報取得
+end note
+
+note left of Consignee
+  **送付先マスタ**
+  - LatestReceive条件でフィルタ
+  - Address JOIN で住所情報取得
+  - 配送指示・希望時間管理
+end note
+
+@enduml

@@ -17,6 +17,107 @@ React + CloudFlare D1 + MUIを使用したHighLandirectのWeb版アプリケー�
 - **商品管理**: 配送商品の管理
 - **集配所管理**: ヤマト運輸等の集配所情報管理
 
+## データベース設計（ER図）
+
+```mermaid
+erDiagram
+    %% HighLandirect Web版 データベース ER図 (Order+OrderDetail正規化済み)
+    
+    Address {
+        int AddressId PK
+        text Name "NOT NULL"
+        text Furigana
+        text PostalCD
+        text PrefectureName
+        text CityName
+        text Address1
+        datetime CreatedAt
+        datetime UpdatedAt
+        int IsActive "DEFAULT 1"
+    }
+
+    Shipper {
+        int ShipperId PK
+        int AddressId FK
+        text ShipperCode UK
+        int IsActive "DEFAULT 1"
+        datetime CreatedAt
+        datetime UpdatedAt
+    }
+
+    Consignee {
+        int ConsigneeId PK
+        int AddressId FK
+        text ConsigneeCode UK
+        text DeliveryInstructions
+        text PreferredDeliveryTime
+        int IsActive "DEFAULT 1"
+        datetime CreatedAt
+        datetime UpdatedAt
+    }
+
+    ProductMaster {
+        int ProductId PK
+        text ProductName "NOT NULL"
+        real UnitPrice "NOT NULL"
+        int IsDefault "DEFAULT 0"
+        int IsActive "DEFAULT 1"
+        datetime CreatedAt
+        datetime UpdatedAt
+    }
+
+    Store {
+        int StoreId PK
+        text StoreName
+        text ServiceArea
+        int IsDefault "DEFAULT 0"
+        int IsActive "DEFAULT 1"
+        datetime CreatedAt
+        datetime UpdatedAt
+    }
+
+    Order {
+        int OrderId PK
+        datetime OrderDate "NOT NULL"
+        int ShipperId FK
+        int StoreId FK
+        real OrderTotal "集約値"
+        int ItemCount "集約値"
+        text TrackingNumber
+        datetime CreatedAt
+        datetime UpdatedAt
+    }
+
+    OrderDetail {
+        int OrderDetailId PK
+        int OrderId FK
+        int ConsigneeId FK
+        int ProductId FK
+        int Quantity "NOT NULL"
+        real UnitPrice "NOT NULL"
+        real LineTotal "計算値"
+        datetime CreatedAt
+        datetime UpdatedAt
+    }
+
+    %% リレーションシップ定義
+    Address ||--o{ Shipper : "住所一元管理"
+    Address ||--o{ Consignee : "住所一元管理"
+    Shipper ||--o{ Order : "荷主-注文"
+    Store ||--o{ Order : "集配所-注文"
+    Order ||--o{ OrderDetail : "注文-明細(1対多)"
+    Consignee ||--o{ OrderDetail : "送付先-明細"
+    ProductMaster ||--o{ OrderDetail : "商品-明細"
+```
+
+### 主要な設計特徴
+- **住所一元管理**: AddressテーブルでShipper・Consigneeの住所情報を統合
+- **Order正規化**: Order（ヘッダー）+ OrderDetail（明細）の1対多構造
+- **集約値管理**: OrderTotal・ItemCountはOrderDetailから自動計算
+- **2025/8/13**: Order model refactoringにより正規化構造に移行完了
+
+詳細なER図とデータベース仕様は [`docs/README.md`](./docs/README.md) を参照してください。
+
 ## 技術スタック
 
 ### フロントエンド
