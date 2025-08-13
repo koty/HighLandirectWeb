@@ -28,7 +28,7 @@ import dayjs, { Dayjs } from 'dayjs'
 import { useSnackbar } from 'notistack'
 import DeleteIcon from '@mui/icons-material/Delete'
 
-import type { OrderFormData, OrderDetail, Consignee, Order } from '@/types'
+import type { OrderFormData, OrderDetailForm, Consignee, Order } from '@/types'
 import { useQuery } from 'react-query'
 import axios from 'axios'
 import { api } from '@/api/client'
@@ -145,30 +145,32 @@ const OrderForm: React.FC = () => {
       setValue('ShipperId', order.ShipperId)
       setValue('StoreId', order.StoreId)
       
-      // 注文明細を設定（単一明細として）
-      const consignee = consignees.find(c => c.ConsigneeId === order.ConsigneeId)
-      const product = products.find(p => p.ProductId === order.ProductId)
-      
-      if (consignee) {
-        const orderDetail: OrderDetail = {
-          id: generateDetailId(),
-          ConsigneeId: order.ConsigneeId,
-          Consignee: consignee,
-          ProductId: order.ProductId,
-          Product: product,
-          Quantity: order.Quantity,
-          UnitPrice: order.UnitPrice,
-          TotalAmount: order.TotalAmount,
-        }
+      // 注文明細を設定（新しい構造では OrderDetails 配列を利用）
+      if (order.OrderDetails && order.OrderDetails.length > 0) {
+        const formDetails: OrderDetailForm[] = order.OrderDetails.map((detail: any) => {
+          const consignee = consignees.find(c => c.ConsigneeId === detail.ConsigneeId)
+          const product = products.find(p => p.ProductId === detail.ProductId)
+          
+          return {
+            id: generateDetailId(),
+            ConsigneeId: detail.ConsigneeId,
+            Consignee: consignee,
+            ProductId: detail.ProductId,
+            Product: product,
+            Quantity: detail.Quantity,
+            UnitPrice: detail.UnitPrice,
+            TotalAmount: detail.LineTotal,
+          }
+        })
         
-        setValue('OrderDetails', [orderDetail])
+        setValue('OrderDetails', formDetails)
       }
     }
   }, [isEdit, orderData, consignees, products, setValue])
 
   // 注文明細を追加する関数
   const addOrderDetail = (consignee: Consignee, order?: Order) => {
-    const currentDetails = watch('OrderDetails') as OrderDetail[]
+    const currentDetails = watch('OrderDetails') as OrderDetailForm[]
     
     // 既に同じ送付先の明細があるかチェック
     const existingDetail = currentDetails.find(detail => detail.ConsigneeId === consignee.ConsigneeId)
@@ -176,7 +178,7 @@ const OrderForm: React.FC = () => {
       return // 既に存在する場合は追加しない
     }
 
-    const newDetail: OrderDetail = {
+    const newDetail: OrderDetailForm = {
       id: generateDetailId(),
       ConsigneeId: consignee.ConsigneeId,
       Consignee: consignee,
@@ -193,14 +195,14 @@ const OrderForm: React.FC = () => {
 
   // 注文明細を削除する関数
   const removeOrderDetail = (detailId: string) => {
-    const currentDetails = watch('OrderDetails') as OrderDetail[]
+    const currentDetails = watch('OrderDetails') as OrderDetailForm[]
     const updatedDetails = currentDetails.filter(detail => detail.id !== detailId)
     setValue('OrderDetails', updatedDetails)
   }
 
   // 注文明細を更新する関数
-  const updateOrderDetail = (detailId: string, updates: Partial<OrderDetail>) => {
-    const currentDetails = watch('OrderDetails') as OrderDetail[]
+  const updateOrderDetail = (detailId: string, updates: Partial<OrderDetailForm>) => {
+    const currentDetails = watch('OrderDetails') as OrderDetailForm[]
     const updatedDetails = currentDetails.map(detail => 
       detail.id === detailId ? { ...detail, ...updates } : detail
     )

@@ -31,22 +31,53 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       )
     }
 
-    const query = `
+    // 注文ヘッダー取得
+    const orderQuery = `
       SELECT 
-        o.OrderId, o.OrderDate, o.ShipperId, o.ConsigneeId, o.ProductId, o.StoreId,
-        o.Quantity, o.UnitPrice, o.TotalAmount, o.TrackingNumber, o.CreatedAt, o.UpdatedAt,
-        sa.Name as ShipperName, ca.Name as ConsigneeName, pm.ProductName, st.StoreName
+        o.OrderId, o.OrderDate, o.ShipperId, o.StoreId,
+        o.OrderTotal, o.ItemCount, o.TrackingNumber, o.CreatedAt, o.UpdatedAt,
+        sa.Name as ShipperName, st.StoreName
       FROM "Order" o
       LEFT JOIN Shipper s ON o.ShipperId = s.ShipperId
       LEFT JOIN Address sa ON s.AddressId = sa.AddressId
-      LEFT JOIN Consignee c ON o.ConsigneeId = c.ConsigneeId
-      LEFT JOIN Address ca ON c.AddressId = ca.AddressId
-      LEFT JOIN ProductMaster pm ON o.ProductId = pm.ProductId
       LEFT JOIN Store st ON o.StoreId = st.StoreId
       WHERE o.OrderId = ?
     `
 
-    const result = await env.DB.prepare(query).bind(Number(id)).first()
+    const order = await env.DB.prepare(orderQuery).bind(Number(id)).first()
+    
+    if (!order) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Order not found'
+        }),
+        {
+          status: 404,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      )
+    }
+
+    // 注文明細取得
+    const detailsQuery = `
+      SELECT 
+        od.OrderDetailId, od.OrderId, od.ConsigneeId, od.ProductId,
+        od.Quantity, od.UnitPrice, od.LineTotal, od.CreatedAt, od.UpdatedAt,
+        ca.Name as ConsigneeName, pm.ProductName
+      FROM OrderDetail od
+      LEFT JOIN Consignee c ON od.ConsigneeId = c.ConsigneeId
+      LEFT JOIN Address ca ON c.AddressId = ca.AddressId
+      LEFT JOIN ProductMaster pm ON od.ProductId = pm.ProductId
+      WHERE od.OrderId = ?
+    `
+
+    const detailsResult = await env.DB.prepare(detailsQuery).bind(Number(id)).all()
+    
+    const result = {
+      ...order,
+      OrderDetails: detailsResult.results || []
+    }
 
     if (!result) {
       return new Response(
@@ -106,12 +137,24 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
 
     const data = await request.json() as any
 
-    // Validate required fields
-    if (!data.ShipperId || !data.ConsigneeId || !data.ProductId || !data.StoreId) {
+    // 注文ヘッダーの基本情報のみ更新可能（OrderDate, TrackingNumber）
+    // 明細情報は別途明細管理APIで対応する設計
+    const allowedFields = ['OrderDate', 'TrackingNumber']
+    const updates = []
+    const values = []
+    
+    allowedFields.forEach(field => {
+      if (data[field] !== undefined) {
+        updates.push(`${field} = ?`)
+        values.push(data[field])
+      }
+    })
+    
+    if (updates.length === 0) {
       return new Response(
         JSON.stringify({
           success: false,
-          error: 'Missing required fields'
+          error: 'No valid fields to update'
         }),
         {
           status: 400,
@@ -120,34 +163,17 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       )
     }
 
+    // UpdatedAtを追加
+    updates.push('UpdatedAt = datetime(\'now\')')
+    values.push(Number(id))
+
     const updateQuery = `
       UPDATE "Order"
-      SET 
-        OrderDate = ?,
-        ShipperId = ?,
-        ConsigneeId = ?,
-        ProductId = ?,
-        StoreId = ?,
-        Quantity = ?,
-        UnitPrice = ?,
-        TotalAmount = ?,
-        UpdatedAt = datetime('now')
+      SET ${updates.join(', ')}
       WHERE OrderId = ?
     `
 
-    const result = await env.DB.prepare(updateQuery)
-      .bind(
-        data.OrderDate,
-        data.ShipperId,
-        data.ConsigneeId,
-        data.ProductId,
-        data.StoreId,
-        data.Quantity || 1,
-        data.UnitPrice || 0,
-        data.TotalAmount || 0,
-        Number(id)
-      )
-      .run()
+    const result = await env.DB.prepare(updateQuery).bind(...values).run()
 
     if (result.changes === 0) {
       return new Response(
@@ -162,28 +188,45 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       )
     }
 
-    // Get updated order
-    const getQuery = `
+    // 更新された注文を取得（明細込み）
+    const getOrderQuery = `
       SELECT 
-        o.OrderId, o.OrderDate, o.ShipperId, o.ConsigneeId, o.ProductId, o.StoreId,
-        o.Quantity, o.UnitPrice, o.TotalAmount, o.TrackingNumber, o.CreatedAt, o.UpdatedAt,
-        sa.Name as ShipperName, ca.Name as ConsigneeName, pm.ProductName, st.StoreName
+        o.OrderId, o.OrderDate, o.ShipperId, o.StoreId,
+        o.OrderTotal, o.ItemCount, o.TrackingNumber, o.CreatedAt, o.UpdatedAt,
+        sa.Name as ShipperName, st.StoreName
       FROM "Order" o
       LEFT JOIN Shipper s ON o.ShipperId = s.ShipperId
       LEFT JOIN Address sa ON s.AddressId = sa.AddressId
-      LEFT JOIN Consignee c ON o.ConsigneeId = c.ConsigneeId
-      LEFT JOIN Address ca ON c.AddressId = ca.AddressId
-      LEFT JOIN ProductMaster pm ON o.ProductId = pm.ProductId
       LEFT JOIN Store st ON o.StoreId = st.StoreId
       WHERE o.OrderId = ?
     `
 
-    const updatedOrder = await env.DB.prepare(getQuery).bind(Number(id)).first()
+    const updatedOrder = await env.DB.prepare(getOrderQuery).bind(Number(id)).first()
+    
+    // 明細も取得
+    const detailsQuery = `
+      SELECT 
+        od.OrderDetailId, od.OrderId, od.ConsigneeId, od.ProductId,
+        od.Quantity, od.UnitPrice, od.LineTotal, od.CreatedAt, od.UpdatedAt,
+        ca.Name as ConsigneeName, pm.ProductName
+      FROM OrderDetail od
+      LEFT JOIN Consignee c ON od.ConsigneeId = c.ConsigneeId
+      LEFT JOIN Address ca ON c.AddressId = ca.AddressId
+      LEFT JOIN ProductMaster pm ON od.ProductId = pm.ProductId
+      WHERE od.OrderId = ?
+    `
+
+    const detailsResult = await env.DB.prepare(detailsQuery).bind(Number(id)).all()
+    
+    const finalOrder = {
+      ...updatedOrder,
+      OrderDetails: detailsResult.results || []
+    }
 
     return new Response(
       JSON.stringify({
         success: true,
-        data: updatedOrder
+        data: finalOrder
       }),
       {
         status: 200,

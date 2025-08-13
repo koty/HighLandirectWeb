@@ -33,8 +33,18 @@ INSERT INTO Store (StoreId, StoreName, IsDefault, IsActive) VALUES
 (2, '大阪主管支店', 0, 1),
 (3, '名古屋主管支店', 0, 1);
 
--- 注文データ
-INSERT INTO "Order" (OrderId, OrderDate, ShipperId, ConsigneeId, ProductId, StoreId, Quantity, UnitPrice, TotalAmount) VALUES
-(1, '2024-01-15', 1, 1, 1, 1, 1, 2500, 2500),
-(2, '2024-01-16', 2, 3, 4, 2, 2, 6500, 13000),
-(3, '2024-01-17', 3, 1, 3, 3, 1, 3500, 3500);
+-- 注文データ（ヘッダー）
+INSERT INTO "Order" (OrderId, OrderDate, ShipperId, StoreId, OrderTotal, ItemCount) VALUES
+(1, '2024-01-15', 1, 1, 9000, 2),
+(2, '2024-01-16', 2, 2, 13000, 2),
+(3, '2024-01-17', 3, 3, 3500, 1);
+
+-- 注文明細データ
+INSERT INTO OrderDetail (OrderDetailId, OrderId, ConsigneeId, ProductId, Quantity, UnitPrice, LineTotal) VALUES
+-- 注文1: 東京商事から山田太郎へ複数商品
+(1, 1, 1, 1, 1, 2500, 2500),  -- りんご 5kg × 1
+(2, 1, 1, 3, 2, 3250, 6500),  -- 桃 5kg × 2 (少し割引)
+-- 注文2: 大阪工業から大阪工業（自社）へ
+(3, 2, 3, 4, 2, 6500, 13000), -- 桃 10kg × 2
+-- 注文3: 名古屋商会から山田太郎へ
+(4, 3, 1, 3, 1, 3500, 3500);  -- 桃 5kg × 1

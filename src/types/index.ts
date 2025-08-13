@@ -66,25 +66,29 @@ export interface Order {
   OrderId: number;
   OrderDate: string;
   ShipperId: number;
-  ConsigneeId: number;
-  ProductId: number;
   StoreId: number;
-  Quantity: number;
-  UnitPrice?: number;
-  TotalAmount?: number;
+  OrderTotal: number;
+  ItemCount: number;
   TrackingNumber?: string;
   CreatedAt: string;
   UpdatedAt: string;
   Shipper?: Shipper;
-  Consignee?: Consignee;
-  Product?: Product;
   Store?: Store;
+  OrderDetails?: OrderDetail[];
 }
 
-export interface OrderHistory {
-  OrderHistoryId: number;
+export interface OrderDetail {
+  OrderDetailId: number;
   OrderId: number;
-  ChangedAt: string;
+  ConsigneeId: number;
+  ProductId: number;
+  Quantity: number;
+  UnitPrice: number;
+  LineTotal: number;
+  CreatedAt: string;
+  UpdatedAt: string;
+  Consignee?: Consignee;
+  Product?: Product;
 }
 
 export interface ReportMemo {
@@ -112,9 +116,9 @@ export interface PaginatedResponse<T> {
 }
 
 // フォーム型定義
-// 注文明細（送付先ごとの商品・数量情報）
-export interface OrderDetail {
-  id: string; // フォーム内で一意のID
+// 注文明細フォーム用（作成時の一時的なデータ構造）
+export interface OrderDetailForm {
+  id: string; // フォーム内で一意のID（作成時のみ使用）
   ConsigneeId: number;
   Consignee?: Consignee;
   ProductId: number | '';
@@ -128,7 +132,7 @@ export interface OrderFormData {
   OrderDate: string;
   ShipperId: number | '';
   StoreId: number | '';
-  OrderDetails: OrderDetail[]; // 注文明細配列
+  OrderDetails: OrderDetailForm[]; // 注文明細配列（フォーム用）
 }
 
 // 旧OrderItem型は削除（OrderDetailに統合）

@@ -1,207 +1,233 @@
-// CloudFlare Pages Function: Orders API with D1 Database
-import { EventContext, Env, CORS_HEADERS } from '../types';
+// CloudFlare Pages Function: Orders API with Order + OrderDetail structure
+import type { PagesFunction, Env } from '../types';
 
-interface Order {
-  OrderId: number;
-  OrderDate: string;
-  TotalAmount: number;
-  Quantity: number;
-  ShipperName: string;
-  ConsigneeName: string;
-  ProductName: string;
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
 }
 
-interface OrderQueryParams {
-  page?: number;
-  limit?: number;
+// Handle CORS preflight
+export const onRequestOptions: PagesFunction<Env> = async () => {
+  return new Response(null, { status: 200, headers: corsHeaders })
 }
 
-// Database query helpers
-async function getOrders(env: Env, { page = 1, limit = 10 }: OrderQueryParams = {}): Promise<{ orders: Order[], total: number }> {
-  let query = `
-    SELECT 
-      o.OrderId,
-      o.OrderDate,
-      o.TotalAmount,
-      o.Quantity,
-      sa.Name as ShipperName,
-      ca.Name as ConsigneeName,
-      pm.ProductName
-    FROM "Order" o
-    LEFT JOIN Shipper s ON o.ShipperId = s.ShipperId
-    LEFT JOIN Address sa ON s.AddressId = sa.AddressId
-    LEFT JOIN Consignee c ON o.ConsigneeId = c.ConsigneeId
-    LEFT JOIN Address ca ON c.AddressId = ca.AddressId
-    LEFT JOIN ProductMaster pm ON o.ProductId = pm.ProductId
-    WHERE 1 = 1
-  `;
-
-  const params = [];
-
-  query += ` ORDER BY o.OrderDate DESC`;
-  
-  // Add pagination
-  const offset = (page - 1) * limit;
-  query += ` LIMIT ? OFFSET ?`;
-  params.push(limit, offset);
-
-  console.log('SQL Query:', query, 'Params:', params);
-  
-  const { results } = await env.DB.prepare(query).bind(...params).all();
-  const total = await getOrdersCount(env);
-  return { orders: results || [], total };
-}
-
-async function getOrdersCount(env) {
-  let query = `SELECT COUNT(*) as total FROM "Order" WHERE 1 = 1`;
-  const params = [];
-
-  const { results } = await env.DB.prepare(query).bind(...params).all();
-  return results[0]?.total || 0;
-}
-
-interface CreateOrderData {
-  ShipperId?: number;
-  ConsigneeId?: number;
-  ProductId?: number;
-  StoreId?: number;
-  Quantity?: number;
-  UnitPrice?: number;
-  TotalAmount?: number;
-}
-
-async function createOrder(env: Env, orderData: CreateOrderData): Promise<Order> {
-  const query = `
-    INSERT INTO "Order" (
-      OrderDate, ShipperId, ConsigneeId, ProductId, StoreId,
-      Quantity, UnitPrice, TotalAmount
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `;
-
-  const params = [
-    new Date().toISOString().split('T')[0],
-    orderData.ShipperId || 1,
-    orderData.ConsigneeId || 1,
-    orderData.ProductId || 1,
-    orderData.StoreId || 1,
-    orderData.Quantity || 1,
-    orderData.UnitPrice || 1000,
-    orderData.TotalAmount || 1000
-  ];
-
-  await env.DB.prepare(query).bind(...params).run();
-  
-  // Return the created order
-  const selectQuery = `
-    SELECT 
-      o.OrderId,
-      o.OrderDate,
-      o.TotalAmount,
-      o.Quantity,
-      sa.Name as ShipperName,
-      ca.Name as ConsigneeName,
-      pm.ProductName
-    FROM "Order" o
-    LEFT JOIN Shipper s ON o.ShipperId = s.ShipperId
-    LEFT JOIN Address sa ON s.AddressId = sa.AddressId
-    LEFT JOIN Consignee c ON o.ConsigneeId = c.ConsigneeId
-    LEFT JOIN Address ca ON c.AddressId = ca.AddressId
-    LEFT JOIN ProductMaster pm ON o.ProductId = pm.ProductId
-    WHERE o.OrderId = (SELECT last_insert_rowid())
-  `;
-
-  const { results } = await env.DB.prepare(selectQuery).all();
-  return results?.[0] || null;
-}
-
-export async function onRequest(context: EventContext<Env>): Promise<Response> {
-  const { request, env } = context;
-  const url = new URL(request.url);
-  
-  // Handle CORS preflight
-  if (request.method === 'OPTIONS') {
-    return new Response(null, { headers: CORS_HEADERS });
-  }
-
-  // Check if database is available
-  if (!env.DB) {
-    console.error('Database not available, falling back to mock data');
-    return new Response(JSON.stringify({
-      error: 'Database not configured'
-    }), {
-      status: 500,
-      headers: CORS_HEADERS
-    });
-  }
-
+// GET: 注文一覧取得（Order + OrderDetail JOIN）
+export const onRequestGet: PagesFunction<Env> = async (context) => {
   try {
-    if (request.method === 'GET') {
-      // Parse query parameters
-      const page = parseInt(url.searchParams.get('page') || '1');
-      const limit = parseInt(url.searchParams.get('limit') || '10');
-      const status = url.searchParams.get('status');
+    const { env, request } = context
+    const url = new URL(request.url)
+    
+    const page = parseInt(url.searchParams.get('page') || '1')
+    const limit = parseInt(url.searchParams.get('limit') || '10')
+    const offset = (page - 1) * limit
 
-      console.log('Fetching orders from D1:', { page, limit, status });
+    // 注文ヘッダー一覧を取得
+    const ordersQuery = `
+      SELECT 
+        o.OrderId,
+        o.OrderDate,
+        o.ShipperId,
+        o.StoreId,
+        o.OrderTotal,
+        o.ItemCount,
+        o.TrackingNumber,
+        o.CreatedAt,
+        o.UpdatedAt,
+        sa.Name as ShipperName,
+        st.StoreName
+      FROM "Order" o
+      LEFT JOIN Shipper s ON o.ShipperId = s.ShipperId
+      LEFT JOIN Address sa ON s.AddressId = sa.AddressId
+      LEFT JOIN Store st ON o.StoreId = st.StoreId
+      ORDER BY o.OrderDate DESC
+      LIMIT ? OFFSET ?
+    `
 
-      // Get orders from database
-      const result = await getOrders(env, { 
-        page, 
-        limit
-      });
+    const ordersResult = await env.DB.prepare(ordersQuery).bind(limit, offset).all()
+    const orders = ordersResult.results || []
 
-      const response = {
+    // 各注文の明細を取得
+    const ordersWithDetails = await Promise.all(
+      orders.map(async (order: any) => {
+        const detailsQuery = `
+          SELECT 
+            od.OrderDetailId,
+            od.OrderId,
+            od.ConsigneeId,
+            od.ProductId,
+            od.Quantity,
+            od.UnitPrice,
+            od.LineTotal,
+            od.CreatedAt,
+            od.UpdatedAt,
+            ca.Name as ConsigneeName,
+            pm.ProductName
+          FROM OrderDetail od
+          LEFT JOIN Consignee c ON od.ConsigneeId = c.ConsigneeId
+          LEFT JOIN Address ca ON c.AddressId = ca.AddressId
+          LEFT JOIN ProductMaster pm ON od.ProductId = pm.ProductId
+          WHERE od.OrderId = ?
+        `
+        
+        const detailsResult = await env.DB.prepare(detailsQuery).bind(order.OrderId).all()
+        
+        return {
+          ...order,
+          OrderDetails: detailsResult.results || []
+        }
+      })
+    )
+
+    // 総件数取得
+    const countResult = await env.DB.prepare('SELECT COUNT(*) as total FROM "Order"').first()
+    const total = countResult.total || 0
+
+    return new Response(
+      JSON.stringify({
         success: true,
-        data: result.orders,
+        data: ordersWithDetails,
         pagination: {
           page,
           limit,
-          total: result.total,
-          totalPages: Math.ceil(result.total / limit)
+          total,
+          totalPages: Math.ceil(total / limit)
         }
-      };
-
-      console.log('D1 Response:', { orderCount: result.orders.length, total: result.total });
-
-      return new Response(JSON.stringify(response), { 
-        headers: CORS_HEADERS 
-      });
-    }
-
-    if (request.method === 'POST') {
-      const body = await request.json();
-      
-      console.log('Creating new order:', body);
-
-      // Create new order in database
-      const newOrder = await createOrder(env, body);
-
-      const response = {
-        success: true,
-        data: newOrder
-      };
-
-      console.log('Created order:', newOrder);
-
-      return new Response(JSON.stringify(response), { 
-        headers: CORS_HEADERS 
-      });
-    }
-
-    // Method not allowed
-    return new Response(JSON.stringify({
-      error: 'Method not allowed'
-    }), {
-      status: 405,
-      headers: CORS_HEADERS
-    });
-
+      }),
+      {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
+    )
   } catch (error) {
-    return new Response(JSON.stringify({
-      error: 'Internal server error',
-      details: error.message
-    }), {
-      status: 500,
-      headers: CORS_HEADERS
-    });
+    console.error('Get orders error:', error)
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: 'Internal server error'
+      }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
+    )
+  }
+}
+
+// POST: 新規注文作成（Order + OrderDetail をトランザクション処理）
+export const onRequestPost: PagesFunction<Env> = async (context) => {
+  try {
+    const { env, request } = context
+    const data = await request.json() as any
+
+    // バリデーション
+    if (!data.OrderDate || !data.ShipperId || !data.StoreId || !data.OrderDetails || !Array.isArray(data.OrderDetails)) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Missing required fields: OrderDate, ShipperId, StoreId, OrderDetails'
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      )
+    }
+
+    if (data.OrderDetails.length === 0) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'At least one order detail is required'
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      )
+    }
+
+    // 注文合計計算
+    let orderTotal = 0
+    let itemCount = 0
+    for (const detail of data.OrderDetails) {
+      const lineTotal = (detail.Quantity || 0) * (detail.UnitPrice || 0)
+      orderTotal += lineTotal
+      itemCount += detail.Quantity || 0
+    }
+
+    // 注文ヘッダー作成
+    const orderQuery = `
+      INSERT INTO "Order" (
+        OrderDate, ShipperId, StoreId, OrderTotal, ItemCount
+      ) VALUES (?, ?, ?, ?, ?)
+    `
+
+    const orderResult = await env.DB.prepare(orderQuery)
+      .bind(data.OrderDate, data.ShipperId, data.StoreId, orderTotal, itemCount)
+      .run()
+
+    const orderId = orderResult.meta.last_row_id
+
+    // 注文明細作成（並行処理）
+    const detailPromises = data.OrderDetails.map((detail: any) => {
+      const lineTotal = (detail.Quantity || 0) * (detail.UnitPrice || 0)
+      const detailQuery = `
+        INSERT INTO OrderDetail (
+          OrderId, ConsigneeId, ProductId, Quantity, UnitPrice, LineTotal
+        ) VALUES (?, ?, ?, ?, ?, ?)
+      `
+      return env.DB.prepare(detailQuery)
+        .bind(orderId, detail.ConsigneeId, detail.ProductId, detail.Quantity, detail.UnitPrice, lineTotal)
+        .run()
+    })
+
+    await Promise.all(detailPromises)
+
+    // 作成された注文を取得して返す
+    const createdOrderQuery = `
+      SELECT 
+        o.OrderId,
+        o.OrderDate,
+        o.ShipperId,
+        o.StoreId,
+        o.OrderTotal,
+        o.ItemCount,
+        o.TrackingNumber,
+        o.CreatedAt,
+        o.UpdatedAt,
+        sa.Name as ShipperName,
+        st.StoreName
+      FROM "Order" o
+      LEFT JOIN Shipper s ON o.ShipperId = s.ShipperId
+      LEFT JOIN Address sa ON s.AddressId = sa.AddressId
+      LEFT JOIN Store st ON o.StoreId = st.StoreId
+      WHERE o.OrderId = ?
+    `
+
+    const createdOrder = await env.DB.prepare(createdOrderQuery).bind(orderId).first()
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        data: createdOrder
+      }),
+      {
+        status: 201,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
+    )
+  } catch (error) {
+    console.error('Create order error:', error)
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: 'Internal server error'
+      }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
+    )
   }
 }

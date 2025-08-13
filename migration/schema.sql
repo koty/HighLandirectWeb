@@ -67,32 +67,35 @@ CREATE TABLE Store (
     UpdatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- 注文
+-- 注文ヘッダー
 CREATE TABLE "Order" (
     OrderId INTEGER PRIMARY KEY AUTOINCREMENT,
     OrderDate DATETIME NOT NULL,
     ShipperId INTEGER NOT NULL,
-    ConsigneeId INTEGER NOT NULL,
-    ProductId INTEGER NOT NULL,
     StoreId INTEGER NOT NULL,
-    Quantity INTEGER NOT NULL DEFAULT 1,
-    UnitPrice REAL,
-    TotalAmount REAL,
+    OrderTotal REAL DEFAULT 0,
+    ItemCount INTEGER DEFAULT 0,
     TrackingNumber TEXT,
     CreatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
     UpdatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (ShipperId) REFERENCES Shipper(ShipperId),
-    FOREIGN KEY (ConsigneeId) REFERENCES Consignee(ConsigneeId),
-    FOREIGN KEY (ProductId) REFERENCES ProductMaster(ProductId),
     FOREIGN KEY (StoreId) REFERENCES Store(StoreId)
 );
 
--- 注文履歴
-CREATE TABLE OrderHistory (
-    OrderHistoryId INTEGER PRIMARY KEY AUTOINCREMENT,
+-- 注文明細
+CREATE TABLE OrderDetail (
+    OrderDetailId INTEGER PRIMARY KEY AUTOINCREMENT,
     OrderId INTEGER NOT NULL,
-    ChangedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (OrderId) REFERENCES "Order"(OrderId)
+    ConsigneeId INTEGER NOT NULL,
+    ProductId INTEGER NOT NULL,
+    Quantity INTEGER NOT NULL DEFAULT 1,
+    UnitPrice REAL NOT NULL,
+    LineTotal REAL NOT NULL,
+    CreatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UpdatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (OrderId) REFERENCES "Order"(OrderId) ON DELETE CASCADE,
+    FOREIGN KEY (ConsigneeId) REFERENCES Consignee(ConsigneeId),
+    FOREIGN KEY (ProductId) REFERENCES ProductMaster(ProductId)
 );
 
 -- レポートメモ
@@ -108,6 +111,9 @@ CREATE INDEX idx_address_name ON Address(Name);
 CREATE INDEX idx_address_postal ON Address(PostalCD);
 CREATE INDEX idx_order_date ON "Order"(OrderDate);
 CREATE INDEX idx_order_tracking ON "Order"(TrackingNumber);
+CREATE INDEX idx_order_detail_order ON OrderDetail(OrderId);
+CREATE INDEX idx_order_detail_consignee ON OrderDetail(ConsigneeId);
+CREATE INDEX idx_order_detail_product ON OrderDetail(ProductId);
 
 -- トリガー：更新日時の自動更新
 CREATE TRIGGER update_address_timestamp 
@@ -144,4 +150,10 @@ CREATE TRIGGER update_order_timestamp
     AFTER UPDATE ON "Order"
     BEGIN 
         UPDATE "Order" SET UpdatedAt = CURRENT_TIMESTAMP WHERE OrderId = NEW.OrderId;
+    END;
+
+CREATE TRIGGER update_order_detail_timestamp 
+    AFTER UPDATE ON OrderDetail 
+    BEGIN 
+        UPDATE OrderDetail SET UpdatedAt = CURRENT_TIMESTAMP WHERE OrderDetailId = NEW.OrderDetailId;
     END;
