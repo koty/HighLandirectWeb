@@ -2,7 +2,7 @@
 import { EventContext, Env, CORS_HEADERS } from '../types';
 
 interface Order {
-  OrderID: number;
+  OrderId: number;
   OrderDate: string;
   TotalAmount: number;
   Quantity: number;
@@ -20,7 +20,7 @@ interface OrderQueryParams {
 async function getOrders(env: Env, { page = 1, limit = 10 }: OrderQueryParams = {}): Promise<{ orders: Order[], total: number }> {
   let query = `
     SELECT 
-      o.OrderId as OrderID,
+      o.OrderId,
       o.OrderDate,
       o.TotalAmount,
       o.Quantity,
@@ -94,7 +94,7 @@ async function createOrder(env: Env, orderData: CreateOrderData): Promise<Order>
   // Return the created order
   const selectQuery = `
     SELECT 
-      o.OrderId as OrderID,
+      o.OrderId,
       o.OrderDate,
       o.TotalAmount,
       o.Quantity,

@@ -6,7 +6,6 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery } from 'react-query'
 import axios from 'axios'
 
-import { Consignee } from '@/types'
 
 const ConsigneeList: React.FC = () => {
   const navigate = useNavigate()
@@ -34,11 +33,9 @@ const ConsigneeList: React.FC = () => {
   )
 
   const columns: GridColDef[] = [
-    { field: 'ConsigneeCode', headerName: '送付先コード', width: 150 },
     { field: 'Name', headerName: '送付先名', width: 300 },
     { field: 'Phone', headerName: '電話番号', width: 150 },
     { field: 'PrefectureName', headerName: '都道府県', width: 120 },
-    { field: 'PreferredDeliveryTime', headerName: '希望時間', width: 120 },
     {
       field: 'actions',
       type: 'actions',

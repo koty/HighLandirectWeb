@@ -5,7 +5,6 @@ import { DataGrid, GridColDef } from '@mui/x-data-grid'
 import { useQuery } from 'react-query'
 import axios from 'axios'
 
-import { Product } from '@/types'
 
 const ProductList: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('')
@@ -32,22 +31,12 @@ const ProductList: React.FC = () => {
   )
 
   const columns: GridColDef[] = [
-    { field: 'ProductCode', headerName: '商品コード', width: 150 },
-    { field: 'ProductName', headerName: '商品名', width: 250 },
-    { field: 'ProductCategory', headerName: 'カテゴリ', width: 150 },
+    { field: 'ProductName', headerName: '商品名', width: 300 },
     { 
       field: 'UnitPrice', 
       headerName: '単価', 
-      width: 120,
+      width: 150,
       valueFormatter: (params) => `¥${params.value?.toLocaleString() || 0}`
-    },
-    { field: 'Weight', headerName: '重量(kg)', width: 100 },
-    { field: 'Dimensions', headerName: 'サイズ', width: 150 },
-    { 
-      field: 'IsFragile', 
-      headerName: '破損注意', 
-      width: 100,
-      renderCell: (params) => params.value ? <Chip label="注意" size="small" color="warning" /> : null
     },
     {
       field: 'IsDefault',
@@ -76,7 +65,7 @@ const ProductList: React.FC = () => {
         <TextField
           fullWidth
           variant="outlined"
-          placeholder="商品名、商品コードで検索..."
+          placeholder="商品名で検索..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           InputProps={{

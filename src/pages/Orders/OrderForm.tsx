@@ -70,6 +70,19 @@ const OrderForm: React.FC = () => {
     return api.stores.list({ limit: 1000 })
   })
 
+  // 編集モード用: 既存注文データを取得
+  const { data: orderData } = useQuery(
+    ['order', id],
+    async () => {
+      if (!id || !isEdit) return null
+      return api.orders.getById(Number(id))
+    },
+    {
+      enabled: isEdit && Boolean(id),
+      retry: false
+    }
+  )
+
   const shippers = shippersData?.data || []
   const consignees = consigneesData?.data || []
   const products = productsData?.data || []
@@ -121,6 +134,37 @@ const OrderForm: React.FC = () => {
       setShipperHistory([])
     }
   }, [watchedShipperId])
+
+  // 編集モード: 既存注文データをフォームに設定
+  useEffect(() => {
+    if (isEdit && orderData?.data) {
+      const order = orderData.data
+      
+      // 基本情報を設定
+      setValue('OrderDate', order.OrderDate)
+      setValue('ShipperId', order.ShipperId)
+      setValue('StoreId', order.StoreId)
+      
+      // 注文明細を設定（単一明細として）
+      const consignee = consignees.find(c => c.ConsigneeId === order.ConsigneeId)
+      const product = products.find(p => p.ProductId === order.ProductId)
+      
+      if (consignee) {
+        const orderDetail: OrderDetail = {
+          id: generateDetailId(),
+          ConsigneeId: order.ConsigneeId,
+          Consignee: consignee,
+          ProductId: order.ProductId,
+          Product: product,
+          Quantity: order.Quantity,
+          UnitPrice: order.UnitPrice,
+          TotalAmount: order.TotalAmount,
+        }
+        
+        setValue('OrderDetails', [orderDetail])
+      }
+    }
+  }, [isEdit, orderData, consignees, products, setValue])
 
   // 注文明細を追加する関数
   const addOrderDetail = (consignee: Consignee, order?: Order) => {
@@ -175,7 +219,28 @@ const OrderForm: React.FC = () => {
       console.log('Submit data:', data)
       
       if (isEdit) {
-        // TODO: PUT API for editing
+        // 編集モード: 単一注文の更新
+        const orderDetail = data.OrderDetails[0]
+        if (!orderDetail) {
+          throw new Error('注文明細が必要です')
+        }
+
+        const updateData = {
+          OrderDate: data.OrderDate,
+          ShipperId: data.ShipperId,
+          ConsigneeId: orderDetail.ConsigneeId,
+          ProductId: orderDetail.ProductId,
+          StoreId: data.StoreId,
+          Quantity: orderDetail.Quantity,
+          UnitPrice: orderDetail.UnitPrice || 0,
+          TotalAmount: orderDetail.TotalAmount || (orderDetail.Quantity * (orderDetail.UnitPrice || 0))
+        }
+
+        const response = await api.orders.update(Number(id), updateData)
+        if (!response.success) {
+          throw new Error(response.error || '注文の更新に失敗しました')
+        }
+        
         enqueueSnackbar('注文を更新しました', { variant: 'success' })
       } else {
         // バリデーション: 注文明細が必要
@@ -187,7 +252,7 @@ const OrderForm: React.FC = () => {
         // 各明細の詳細バリデーション
         const validationErrors: string[] = []
         orderDetails.forEach((detail, index) => {
-          if (!detail.ProductId || detail.ProductId === '' || typeof detail.ProductId !== 'number') {
+          if (!detail.ProductId || typeof detail.ProductId !== 'number') {
             validationErrors.push(`明細${index + 1}: 商品を選択してください`)
           }
           if (!detail.Quantity || detail.Quantity <= 0) {
@@ -284,7 +349,7 @@ const OrderForm: React.FC = () => {
                         field.onChange(shipper?.ShipperId || '')
                       }}
                       options={shippers}
-                      getOptionLabel={(option: any) => `${option.Name || 'Unknown'} (${option.ShipperCode || ''})`}
+                      getOptionLabel={(option: any) => option.Name || 'Unknown'}
                       renderInput={(params) => (
                         <TextField
                           {...params}
@@ -326,7 +391,7 @@ const OrderForm: React.FC = () => {
                                 {detail.Consignee?.Name || '-'}
                                 <br />
                                 <Typography variant="caption" color="text.secondary">
-                                  {detail.Consignee?.ConsigneeCode}
+                                  {detail.Consignee?.PostalCD || ''}
                                 </Typography>
                               </TableCell>
                               <TableCell>
@@ -397,7 +462,7 @@ const OrderForm: React.FC = () => {
                 
                 <Autocomplete
                   options={consignees}
-                  getOptionLabel={(option: any) => `${option.Name || 'Unknown'} (${option.ConsigneeCode || ''})`}
+                  getOptionLabel={(option: any) => option.Name || 'Unknown'}
                   renderInput={(params) => (
                     <TextField
                       {...params}
@@ -501,9 +566,9 @@ const OrderForm: React.FC = () => {
                           disabled={!order.Consignee}
                         />
                       </TableCell>
-                      <TableCell>{order.OrderDate}</TableCell>
-                      <TableCell>{order.Consignee?.Address?.Name || '-'}</TableCell>
-                      <TableCell>{order.Product?.ProductName || '-'}</TableCell>
+                      <TableCell>{dayjs(order.OrderDate).format('YYYY/MM/DD')}</TableCell>
+                      <TableCell>{order.ConsigneeName || '-'}</TableCell>
+                      <TableCell>{order.ProductName || '-'}</TableCell>
                       <TableCell>{order.Quantity}</TableCell>
                       <TableCell>¥{order.TotalAmount?.toLocaleString() || 0}</TableCell>
                     </TableRow>

@@ -194,11 +194,11 @@ const Dashboard: React.FC = () => {
                     primary={
                       <Box display="flex" justifyContent="space-between" alignItems="center">
                         <Typography variant="subtitle2">
-                          {order.OrderNumber}
+                          注文ID: {order.OrderId}
                         </Typography>
                         <Chip
-                          label={getStatusText(order.OrderStatus)}
-                          color={getStatusColor(order.OrderStatus) as any}
+                          label="完了"
+                          color="success"
                           size="small"
                         />
                       </Box>

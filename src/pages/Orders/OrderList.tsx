@@ -8,7 +8,6 @@ import {
   TextField,
   MenuItem,
   Grid,
-  Chip,
   CircularProgress,
 } from '@mui/material'
 import {
@@ -57,7 +56,7 @@ const OrderList: React.FC = () => {
       
       console.log('API Response:', response) // デバッグログ
       
-      if (response.success) {
+      if (response.data) {
         setOrders(response.data)
         if (response.pagination) {
           setPagination(prev => ({
@@ -85,8 +84,8 @@ const OrderList: React.FC = () => {
   // フィルタリング処理（クライアントサイド検索用）
   const filteredOrders = orders.filter((order) => {
     const matchesSearch = searchTerm === '' || 
-      order.Shipper?.Address?.Name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.Consignee?.Address?.Name?.toLowerCase().includes(searchTerm.toLowerCase())
+      order.ShipperName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      order.ConsigneeName?.toLowerCase().includes(searchTerm.toLowerCase())
     
     return matchesSearch
   })
@@ -102,13 +101,11 @@ const OrderList: React.FC = () => {
       field: 'ShipperName',
       headerName: '荷主',
       width: 200,
-      valueGetter: (params) => params.row.Shipper?.Address?.Name || '',
     },
     {
       field: 'ConsigneeName',
       headerName: '送付先',
       width: 200,
-      valueGetter: (params) => params.row.Consignee?.Address?.Name || '',
     },
     {
       field: 'TotalAmount',

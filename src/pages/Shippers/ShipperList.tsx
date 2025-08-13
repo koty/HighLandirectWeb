@@ -34,11 +34,9 @@ const ShipperList: React.FC = () => {
   )
 
   const columns: GridColDef[] = [
-    { field: 'ShipperCode', headerName: '荷主コード', width: 150 },
     { field: 'Name', headerName: '荷主名', width: 300 },
     { field: 'Phone', headerName: '電話番号', width: 150 },
     { field: 'PrefectureName', headerName: '都道府県', width: 120 },
-    { field: 'ShipperType', headerName: '種別', width: 120 },
     {
       field: 'actions',
       type: 'actions',

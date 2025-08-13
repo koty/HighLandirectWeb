@@ -57,15 +57,16 @@ export const api = {
       return response.data;
     },
 
+    getById: async (id: number): Promise<ApiResponse<Order>> => {
+      const response = await apiClient.get(`/orders/${id}`);
+      return response.data;
+    },
+
     update: async (id: number, data: Partial<OrderFormData>): Promise<ApiResponse<Order>> => {
       const response = await apiClient.put(`/orders/${id}`, data);
       return response.data;
     },
 
-    updateStatus: async (id: number, status: Order['OrderStatus']): Promise<ApiResponse<Order>> => {
-      const response = await apiClient.patch(`/orders/${id}/status`, { status });
-      return response.data;
-    },
 
     delete: async (id: number): Promise<ApiResponse<void>> => {
       const response = await apiClient.delete(`/orders/${id}`);

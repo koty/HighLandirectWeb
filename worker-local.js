@@ -171,7 +171,7 @@ router.get('/api/orders', async (request, env) => {
   
   let query = `
     SELECT 
-      o.OrderId as OrderID,
+      o.OrderId,
       o.OrderDate,
       o.ShipperId,
       o.ConsigneeId,
@@ -311,6 +311,173 @@ router.post('/api/orders', async (request, env) => {
   }
 })
 
+// Individual order routes
+router.get('/api/orders/:id', async (request, env) => {
+  const { id } = request.params
+  
+  try {
+    const query = `
+      SELECT 
+        o.OrderId,
+        o.OrderDate,
+        o.ShipperId,
+        o.ConsigneeId,
+        o.ProductId,
+        o.StoreId,
+        o.Quantity,
+        o.UnitPrice,
+        o.TotalAmount,
+        o.TrackingNumber,
+        o.CreatedAt,
+        o.UpdatedAt,
+        sa.Name as ShipperName,
+        ca.Name as ConsigneeName,
+        pm.ProductName,
+        st.StoreName
+      FROM "Order" o
+      LEFT JOIN Shipper s ON o.ShipperId = s.ShipperId
+      LEFT JOIN Address sa ON s.AddressId = sa.AddressId
+      LEFT JOIN Consignee c ON o.ConsigneeId = c.ConsigneeId
+      LEFT JOIN Address ca ON c.AddressId = ca.AddressId
+      LEFT JOIN ProductMaster pm ON o.ProductId = pm.ProductId
+      LEFT JOIN Store st ON o.StoreId = st.StoreId
+      WHERE o.OrderId = ?
+    `
+    
+    const result = await env.DB.prepare(query).bind(id).first()
+    
+    if (!result) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'Order not found'
+      }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json', ...CORS_HEADERS }
+      })
+    }
+    
+    return new Response(JSON.stringify({
+      success: true,
+      data: result
+    }), {
+      headers: { 'Content-Type': 'application/json', ...CORS_HEADERS }
+    })
+  } catch (error) {
+    return new Response(JSON.stringify({
+      success: false,
+      error: error.message
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...CORS_HEADERS }
+    })
+  }
+})
+
+// Update order
+router.put('/api/orders/:id', async (request, env) => {
+  const { id } = request.params
+  
+  try {
+    const data = await request.json()
+    
+    // バリデーション
+    if (!data.ShipperId || !data.ConsigneeId || !data.ProductId || !data.StoreId) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'Missing required fields'
+      }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', ...CORS_HEADERS }
+      })
+    }
+
+    const updateQuery = `
+      UPDATE "Order"
+      SET 
+        OrderDate = ?,
+        ShipperId = ?,
+        ConsigneeId = ?,
+        ProductId = ?,
+        StoreId = ?,
+        Quantity = ?,
+        UnitPrice = ?,
+        TotalAmount = ?,
+        UpdatedAt = datetime('now')
+      WHERE OrderId = ?
+    `
+
+    const result = await env.DB.prepare(updateQuery)
+      .bind(
+        data.OrderDate,
+        data.ShipperId,
+        data.ConsigneeId,
+        data.ProductId,
+        data.StoreId,
+        data.Quantity || 1,
+        data.UnitPrice || 0,
+        data.TotalAmount || 0,
+        id
+      )
+      .run()
+
+    if (result.changes === 0) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'Order not found or not updated'
+      }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json', ...CORS_HEADERS }
+      })
+    }
+
+    // 更新後のデータを取得
+    const getQuery = `
+      SELECT 
+        o.OrderId,
+        o.OrderDate,
+        o.ShipperId,
+        o.ConsigneeId,
+        o.ProductId,
+        o.StoreId,
+        o.Quantity,
+        o.UnitPrice,
+        o.TotalAmount,
+        o.TrackingNumber,
+        o.CreatedAt,
+        o.UpdatedAt,
+        sa.Name as ShipperName,
+        ca.Name as ConsigneeName,
+        pm.ProductName,
+        st.StoreName
+      FROM "Order" o
+      LEFT JOIN Shipper s ON o.ShipperId = s.ShipperId
+      LEFT JOIN Address sa ON s.AddressId = sa.AddressId
+      LEFT JOIN Consignee c ON o.ConsigneeId = c.ConsigneeId
+      LEFT JOIN Address ca ON c.AddressId = ca.AddressId
+      LEFT JOIN ProductMaster pm ON o.ProductId = pm.ProductId
+      LEFT JOIN Store st ON o.StoreId = st.StoreId
+      WHERE o.OrderId = ?
+    `
+
+    const updatedOrder = await env.DB.prepare(getQuery).bind(id).first()
+
+    return new Response(JSON.stringify({
+      success: true,
+      data: updatedOrder
+    }), {
+      headers: { 'Content-Type': 'application/json', ...CORS_HEADERS }
+    })
+  } catch (error) {
+    return new Response(JSON.stringify({
+      success: false,
+      error: error.message
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...CORS_HEADERS }
+    })
+  }
+})
+
 // Individual shipper routes
 router.get('/api/shippers/:id', async (request, env) => {
   const { id } = request.params
@@ -332,12 +499,6 @@ router.get('/api/shippers/:id', async (request, env) => {
         a.Fax,
         a.MailAddress,
         a.Memo,
-        s.ShipperCode,
-        s.ShipperType,
-        s.ContractStartDate,
-        s.ContractEndDate,
-        s.CreditLimit,
-        s.PaymentTerms,
         s.IsActive,
         s.CreatedAt,
         s.UpdatedAt
@@ -431,24 +592,14 @@ router.put('/api/shippers/:id', async (request, env) => {
       addressId
     ).run()
     
-    // Update shipper information
+    // Update shipper information (only UpdatedAt since other fields were removed)
     const updateShipperQuery = `
       UPDATE Shipper SET
-        ShipperCode = ?,
-        ShipperType = ?,
-        ContractStartDate = ?,
-        CreditLimit = ?,
-        PaymentTerms = ?,
         UpdatedAt = CURRENT_TIMESTAMP
       WHERE ShipperId = ?
     `
     
     await env.DB.prepare(updateShipperQuery).bind(
-      data.ShipperCode || null,
-      data.ShipperType || null,
-      data.ContractStartDate || null,
-      data.CreditLimit || null,
-      data.PaymentTerms || null,
       id
     ).run()
     
@@ -469,12 +620,6 @@ router.put('/api/shippers/:id', async (request, env) => {
         a.Fax,
         a.MailAddress,
         a.Memo,
-        s.ShipperCode,
-        s.ShipperType,
-        s.ContractStartDate,
-        s.ContractEndDate,
-        s.CreditLimit,
-        s.PaymentTerms,
         s.IsActive,
         s.CreatedAt,
         s.UpdatedAt
@@ -524,11 +669,6 @@ router.get('/api/consignees', async (request, env) => {
       a.Fax,
       a.MailAddress,
       a.Memo,
-      c.ConsigneeCode,
-      c.DeliveryInstructions,
-      c.AccessInfo,
-      c.PreferredDeliveryTime,
-      c.SpecialHandling,
       c.IsActive,
       c.CreatedAt,
       c.UpdatedAt
@@ -619,15 +759,12 @@ router.post('/api/consignees', async (request, env) => {
     
     // Create consignee
     const consigneeQuery = `
-      INSERT INTO Consignee (AddressId, ConsigneeCode, DeliveryInstructions, PreferredDeliveryTime)
-      VALUES (?, ?, ?, ?)
+      INSERT INTO Consignee (AddressId)
+      VALUES (?)
     `
     
     const consigneeResult = await env.DB.prepare(consigneeQuery).bind(
-      addressId,
-      data.ConsigneeCode || null,
-      data.DeliveryInstructions || null,
-      data.PreferredDeliveryTime || null
+      addressId
     ).run()
     
     const consigneeId = consigneeResult.meta.last_row_id
@@ -674,10 +811,7 @@ router.get('/api/consignees/:id', async (request, env) => {
         a.Fax,
         a.MailAddress,
         a.Memo,
-        c.ConsigneeCode,
-        c.DeliveryInstructions,
-        c.PreferredDeliveryTime,
-        c.IsActive,
+              c.IsActive,
         c.CreatedAt,
         c.UpdatedAt
       FROM Consignee c
@@ -804,10 +938,7 @@ router.put('/api/consignees/:id', async (request, env) => {
         a.Fax,
         a.MailAddress,
         a.Memo,
-        c.ConsigneeCode,
-        c.DeliveryInstructions,
-        c.PreferredDeliveryTime,
-        c.IsActive,
+              c.IsActive,
         c.CreatedAt,
         c.UpdatedAt
       FROM Consignee c
@@ -844,14 +975,8 @@ router.get('/api/products', async (request, env) => {
   let query = `
     SELECT 
       ProductId,
-      ProductCode,
       ProductName,
-      ProductCategory,
       UnitPrice,
-      TaxRate,
-      Weight,
-      Dimensions,
-      IsFragile,
       IsDefault,
       IsActive,
       CreatedAt,
@@ -863,15 +988,12 @@ router.get('/api/products', async (request, env) => {
   const params = []
   
   if (search) {
-    query += ` AND (ProductName LIKE ? OR ProductCode LIKE ?)`
+    query += ` AND ProductName LIKE ?`
     const searchTerm = `%${search}%`
-    params.push(searchTerm, searchTerm)
+    params.push(searchTerm)
   }
   
-  if (category && category !== 'all') {
-    query += ` AND ProductCategory = ?`
-    params.push(category)
-  }
+  // ProductCategory column removed
   
   query += ` ORDER BY IsDefault DESC, ProductName ASC`
   
@@ -934,14 +1056,7 @@ router.get('/api/stores', async (request, env) => {
   let query = `
     SELECT 
       StoreId,
-      StoreCode,
       StoreName,
-      CarrierCode,
-      CarrierName,
-      RegionCode,
-      ContactPhone,
-      ServiceArea,
-      CutoffTime,
       IsDefault,
       IsActive,
       CreatedAt,
@@ -953,15 +1068,12 @@ router.get('/api/stores', async (request, env) => {
   const params = []
   
   if (search) {
-    query += ` AND (StoreName LIKE ? OR ServiceArea LIKE ?)`
+    query += ` AND StoreName LIKE ?`
     const searchTerm = `%${search}%`
-    params.push(searchTerm, searchTerm)
+    params.push(searchTerm)
   }
   
-  if (carrier && carrier !== 'all') {
-    query += ` AND CarrierCode = ?`
-    params.push(carrier)
-  }
+  // CarrierCode column removed
   
   query += ` ORDER BY IsDefault DESC, StoreName ASC`
   
